@@ -4,9 +4,9 @@
     "packageManager": "pnpm@11.23.0",
     "scripts": {
         "dev": "pnpm run dev:all",
-        "dev:api": "pnpm --filter @theorymancer/contracts build && pnpm --filter @theorymancer/api dev",
+        "dev:api": "pnpm --filter @theorymancer/api dev",
         "dev:web": "pnpm --filter @theorymancer/web dev",
-        "dev:all": "pnpm run --parallel dev:api dev:web",
+        "dev:all": "pnpm --parallel --filter @theorymancer/api --filter @theorymancer/web dev",
         "build": "pnpm -r build",
         "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.ts\"",
         "format": "prettier --write .",

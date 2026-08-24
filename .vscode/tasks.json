@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Dev: API",
+            "type": "shell",
+            "command": "pnpm",
+            "args": ["dev:api"],
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "group": "theorymancer",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Dev: Web",
+            "type": "shell",
+            "command": "pnpm",
+            "args": ["dev:web"],
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "group": "theorymancer",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Dev: All",
+            "type": "shell",
+            "command": "pnpm",
+            "args": ["dev"],
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "group": "theorymancer",
+                "panel": "dedicated"
+            }
+        }
+    ]
+}
