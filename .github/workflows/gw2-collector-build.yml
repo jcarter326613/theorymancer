@@ -39,15 +39,21 @@ jobs:
             - name: Build
               run: cmake --build build/gw2-collector --parallel
 
+            - name: Test proxy compatibility
+              run: ctest --test-dir build/gw2-collector --output-on-failure
+
             - name: Create artifact manifest
               shell: pwsh
               run: |
                   $dll = "build/gw2-collector/d3d11.dll"
                   $hash = (Get-FileHash -Algorithm SHA256 $dll).Hash.ToLowerInvariant()
+                  $systemD3D11 = "$env:SystemRoot\System32\d3d11.dll"
+                  $systemD3D11Hash = (Get-FileHash -Algorithm SHA256 $systemD3D11).Hash.ToLowerInvariant()
                   @(
                       "commit=${{ github.sha }}"
                       "ref=${{ github.ref }}"
                       "sha256=$hash  d3d11.dll"
+                      "system_d3d11_sha256=$systemD3D11Hash  $systemD3D11"
                   ) | Set-Content -Encoding ascii "build/gw2-collector/collector-build.txt"
 
             - name: Upload collector artifact
