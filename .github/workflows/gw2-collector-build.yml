@@ -24,20 +24,25 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Enable the MSVC x64 developer environment
+              uses: ilammy/msvc-dev-cmd@v1
+              with:
+                  arch: x64
+
             - name: Configure
               run: >-
                   cmake -S apps/guild-wars-2/windows-collector
                   -B build/gw2-collector
-                  -G "Visual Studio 17 2022"
-                  -A x64
+                  -G Ninja
+                  -DCMAKE_BUILD_TYPE=Release
 
             - name: Build
-              run: cmake --build build/gw2-collector --config Release --parallel
+              run: cmake --build build/gw2-collector --parallel
 
             - name: Create artifact manifest
               shell: pwsh
               run: |
-                  $dll = "build/gw2-collector/Release/d3d11.dll"
+                  $dll = "build/gw2-collector/d3d11.dll"
                   $hash = (Get-FileHash -Algorithm SHA256 $dll).Hash.ToLowerInvariant()
                   @(
                       "commit=${{ github.sha }}"
@@ -50,7 +55,7 @@ jobs:
               with:
                   name: gw2-windows-collector
                   path: |
-                      build/gw2-collector/Release/d3d11.dll
+                      build/gw2-collector/d3d11.dll
                       build/gw2-collector/collector-build.txt
                   if-no-files-found: error
                   retention-days: 7

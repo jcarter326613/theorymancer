@@ -34,8 +34,9 @@ against a supported GW2 build is added.
 ## CI artifacts
 
 Pushing changes under this directory to a `feature` or `feature/**` branch
-builds the Windows x64 DLL on GitHub Actions. The completed workflow run has a
-`gw2-windows-collector` artifact containing `d3d11.dll` and
+builds the Windows x64 DLL on GitHub Actions. The workflow initializes MSVC
+and uses Ninja, avoiding a dependency on a specific Visual Studio version. The
+completed workflow run has a `gw2-windows-collector` artifact containing `d3d11.dll` and
 `collector-build.txt`, which records the source commit and SHA-256 hash.
 
 Artifacts are retained for seven days and are for private development testing
