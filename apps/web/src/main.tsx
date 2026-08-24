@@ -7,14 +7,11 @@ function App() {
     return (
         <main>
             <p className="eyebrow">Theorymancer</p>
-            <h1>Practice what changes the outcome.</h1>
+            <h1>Something is taking shape.</h1>
             <p className="summary">
-                Performance coaching for players who want an answer better than
-                a stat sheet. Guild Wars 2 combat analysis is the first chapter.
+                A new project is in the works. More when it is ready.
             </p>
-            <p className="status">
-                The first analysis tools are in development.
-            </p>
+            <p className="status">Coming eventually.</p>
         </main>
     )
 }
