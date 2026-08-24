@@ -1,0 +1,38 @@
+name: Terraform Validate
+
+on:
+    workflow_dispatch:
+    pull_request:
+        paths:
+            - ".github/workflows/terraform-validate.yml"
+            - "infrastructure/**"
+
+permissions:
+    contents: read
+
+jobs:
+    validate:
+        name: Validate ${{ matrix.directory }}
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                directory:
+                    - bootstrap
+                    - environments/development
+                    - environments/production
+        defaults:
+            run:
+                working-directory: infrastructure/${{ matrix.directory }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Check formatting
+              run: terraform fmt -check -recursive
+
+            - name: Initialize without remote state
+              run: terraform init -backend=false -input=false
+
+            - name: Validate configuration
+              run: terraform validate

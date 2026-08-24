@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: Deployment environment
+                required: true
+                type: choice
+                options:
+                    - development
+                    - production
+
+permissions:
+    contents: read
+    id-token: write
+
+jobs:
+    deploy:
+        name: Deploy ${{ inputs.environment }}
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        concurrency:
+            group: theorymancer-${{ inputs.environment }}
+            cancel-in-progress: false
+        env:
+            ENVIRONMENT: ${{ inputs.environment }}
+            GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+            GCP_REGION: ${{ vars.GCP_REGION }}
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: google-github-actions/setup-gcloud@v2
+
+            - name: Configure Artifact Registry authentication
+              run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+            - name: Build and publish images
+              env:
+                  IMAGE_TAG: ${{ github.sha }}
+              run: |
+                  WEB_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/web:${IMAGE_TAG}"
+                  API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/api:${IMAGE_TAG}"
+                  docker build --build-arg "VITE_API_URL=" -f apps/web/Dockerfile -t "$WEB_IMAGE" .
+                  docker build -f apps/api/Dockerfile -t "$API_IMAGE" .
+                  docker push "$WEB_IMAGE"
+                  docker push "$API_IMAGE"
+                  printf 'WEB_IMAGE=%s\nAPI_IMAGE=%s\n' "$WEB_IMAGE" "$API_IMAGE" >> "$GITHUB_ENV"
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/environments/${{ inputs.environment }}
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - name: Apply infrastructure
+              working-directory: infrastructure/environments/${{ inputs.environment }}
+              run: >-
+                  terraform apply -input=false -auto-approve
+                  -var="project_id=${GCP_PROJECT_ID}"
+                  -var="region=${GCP_REGION}"
+                  -var="web_image=${WEB_IMAGE}"
+                  -var="api_image=${API_IMAGE}"
+
+            - name: Smoke test deployed services
+              working-directory: infrastructure/environments/${{ inputs.environment }}
+              run: |
+                  WEB_URL="$(terraform output -raw web_url)"
+                  API_URL="$(terraform output -raw api_url)"
+                  curl --fail --retry 5 --retry-delay 3 "$WEB_URL"
+                  curl --fail --retry 5 --retry-delay 3 "$API_URL/health"
