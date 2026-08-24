@@ -12,7 +12,8 @@ Product and deployment context live in [`docs/`](docs/).
 - `apps/web`: public React website.
 - `apps/api`: public Node.js API.
 - `packages/contracts`: validated API contracts shared by TypeScript apps.
-- `apps/guild-wars-2`: future Guild Wars 2-specific tooling and analysis.
+- `apps/guild-wars-2`: Guild Wars 2-specific tooling and analysis, including a
+  Windows screen-capture companion.
 - `infrastructure`: Terraform for Google Cloud.
 
 ## Local development
@@ -31,6 +32,13 @@ pnpm build
 pnpm lint
 pnpm format:check
 ```
+
+## Windows collector
+
+The Guild Wars 2 desktop collector is a self-contained C# WPF application,
+separate from the Node.js services and Google Cloud deployment. See
+[`apps/guild-wars-2/README.md`](apps/guild-wars-2/README.md) for Windows build,
+test, and single-file publish commands.
 
 ## Infrastructure
 

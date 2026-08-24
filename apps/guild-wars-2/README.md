@@ -1,8 +1,32 @@
 # Guild Wars 2
 
-This application namespace will contain Guild Wars 2-specific integrations,
-EVTC ingestion, mechanics models, and deterministic performance analysis.
+This application namespace contains Guild Wars 2-specific integrations, EVTC
+ingestion, mechanics models, and deterministic performance analysis.
 
-No implementation language is selected yet. Keep this code independent of the
-public website and API so analysis workloads can use Python or another runtime
-when their requirements justify it.
+`desktop/` is a self-contained C# WPF companion application for capturing the
+visible, calibrated combat-log panel and recognizing changed rows locally. It
+never loads into the game client, accesses game memory, or intercepts network
+traffic. It must be run with Guild Wars 2 visible and unobscured.
+
+The collector targets Windows 10 version 2004 or later on x64 hardware. It
+uses Windows' English OCR language pack; install that pack through Windows
+Settings before recording.
+
+Build and test it on Windows with the .NET SDK pinned in `global.json`:
+
+```powershell
+dotnet build apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj
+dotnet test apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop.Tests/Theorymancer.GuildWars2.Desktop.Tests.csproj
+```
+
+Publish the standard-user executable with:
+
+```powershell
+dotnet publish apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj -c Release -r win-x64 --self-contained true
+```
+
+The publish directory contains `TheorymancerScreenCollector.exe`, which can be
+started by double-clicking it.
+
+Game analysis workloads remain independent of the public website and API and
+may use Python or another runtime when their requirements justify it.

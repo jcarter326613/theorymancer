@@ -1,0 +1,48 @@
+name: Guild Wars 2 desktop collector
+
+on:
+    pull_request:
+        paths:
+            - "apps/guild-wars-2/desktop/**"
+            - "apps/guild-wars-2/README.md"
+            - ".github/workflows/guild-wars-2-desktop.yml"
+            - "global.json"
+    push:
+        branches:
+            - main
+        paths:
+            - "apps/guild-wars-2/desktop/**"
+            - "apps/guild-wars-2/README.md"
+            - ".github/workflows/guild-wars-2-desktop.yml"
+            - "global.json"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: windows-latest
+        defaults:
+            run:
+                shell: pwsh
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: "10.0.100"
+            - name: Restore desktop collector
+              run: dotnet restore apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj
+            - name: Build desktop collector
+              run: dotnet build --configuration Release --no-restore apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj
+            - name: Test desktop collector
+              run: dotnet test --configuration Release apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop.Tests/Theorymancer.GuildWars2.Desktop.Tests.csproj
+            - name: Publish single-file executable
+              run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output artifacts/guild-wars-2-screen-collector apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj
+            - name: Write executable hash
+              run: Get-FileHash artifacts/guild-wars-2-screen-collector/TheorymancerScreenCollector.exe -Algorithm SHA256 | Format-List | Out-File artifacts/guild-wars-2-screen-collector/SHA256.txt
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: guild-wars-2-screen-collector-win-x64
+                  path: artifacts/guild-wars-2-screen-collector
+                  if-no-files-found: error

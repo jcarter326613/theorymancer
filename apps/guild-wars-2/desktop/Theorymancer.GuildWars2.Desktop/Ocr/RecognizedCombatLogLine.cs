@@ -1,0 +1,18 @@
+using Theorymancer.GuildWars2.Desktop.Capture;
+
+namespace Theorymancer.GuildWars2.Desktop.Ocr;
+
+public sealed record RecognizedCombatLogLine(
+    long FirstSeenQpc,
+    int RowIndex,
+    ulong PixelHash,
+    string Text,
+    string ColorClass,
+    IReadOnlyList<RecognizedWord> Words);
+
+public sealed record RecognizedWord(string Text, double X, double Y, double Width, double Height);
+
+public interface ICombatLogOcrEngine
+{
+    Task<RecognizedCombatLogLine?> RecognizeAsync(ChangedRow row, CancellationToken cancellationToken);
+}

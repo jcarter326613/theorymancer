@@ -1,0 +1,56 @@
+<Window x:Class="Theorymancer.GuildWars2.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Theorymancer GW2 Screen Collector"
+        Width="760"
+        Height="540"
+        MinWidth="640"
+        MinHeight="420"
+        Closing="OnClosing">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="12" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="12" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="12" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock FontSize="22" FontWeight="SemiBold" Text="GW2 combat-log collector" />
+      <TextBlock Margin="0,6,0,0" Foreground="DimGray" TextWrapping="Wrap">
+        Captures only the calibrated, visible combat-log region. Keep Guild Wars 2 visible and unobscured while recording.
+      </TextBlock>
+    </StackPanel>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="12" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="12" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Button Grid.Column="0" Padding="12,6" Click="SelectWindow_Click" Content="Select GW2 window" />
+      <Button Grid.Column="2" Padding="12,6" Click="Calibrate_Click" Content="Calibrate combat log" />
+      <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock VerticalAlignment="Center" Text="Row height (px):" />
+        <TextBox x:Name="RowHeightTextBox" Width="50" Margin="6,0,0,0" Text="20" />
+      </StackPanel>
+      <TextBlock Grid.Column="5" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
+    </Grid>
+
+    <ListBox x:Name="ActivityList" Grid.Row="4" FontFamily="Consolas" FontSize="12" />
+
+    <DockPanel Grid.Row="6">
+      <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding CaptureStatus}" />
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button x:Name="StartButton" Padding="14,7" Click="Start_Click" Content="Start capture" />
+        <Button x:Name="StopButton" Margin="8,0,0,0" Padding="14,7" Click="Stop_Click" Content="Stop capture" IsEnabled="False" />
+      </StackPanel>
+    </DockPanel>
+  </Grid>
+</Window>

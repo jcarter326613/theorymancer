@@ -1,0 +1,29 @@
+<Window x:Class="Theorymancer.GuildWars2.Desktop.Capture.GameWindowPicker"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Guild Wars 2"
+        Width="520"
+        Height="330"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="10" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="12" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <TextBlock TextWrapping="Wrap" Foreground="DimGray">
+      Select the running Guild Wars 2 window. The game must remain visible and unobscured while recording.
+    </TextBlock>
+    <ListBox x:Name="WindowList" Grid.Row="2" DisplayMemberPath="Title" SelectionChanged="WindowList_SelectionChanged" />
+    <DockPanel Grid.Row="4">
+      <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="DimGray" Text="{Binding CandidateStatus}" />
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Padding="12,6" Click="Refresh_Click" Content="Refresh" />
+        <Button x:Name="SelectButton" Margin="8,0,0,0" Padding="12,6" Click="Select_Click" Content="Select" IsEnabled="False" />
+      </StackPanel>
+    </DockPanel>
+  </Grid>
+</Window>
