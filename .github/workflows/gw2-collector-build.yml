@@ -1,0 +1,56 @@
+name: Build Guild Wars 2 Collector
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - feature
+            - feature/**
+        paths:
+            - ".github/workflows/gw2-collector-build.yml"
+            - "apps/guild-wars-2/windows-collector/**"
+
+permissions:
+    contents: read
+
+concurrency:
+    group: gw2-collector-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build:
+        name: Build Windows x64 collector
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Configure
+              run: >-
+                  cmake -S apps/guild-wars-2/windows-collector
+                  -B build/gw2-collector
+                  -G "Visual Studio 17 2022"
+                  -A x64
+
+            - name: Build
+              run: cmake --build build/gw2-collector --config Release --parallel
+
+            - name: Create artifact manifest
+              shell: pwsh
+              run: |
+                  $dll = "build/gw2-collector/Release/d3d11.dll"
+                  $hash = (Get-FileHash -Algorithm SHA256 $dll).Hash.ToLowerInvariant()
+                  @(
+                      "commit=${{ github.sha }}"
+                      "ref=${{ github.ref }}"
+                      "sha256=$hash  d3d11.dll"
+                  ) | Set-Content -Encoding ascii "build/gw2-collector/collector-build.txt"
+
+            - name: Upload collector artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: gw2-windows-collector
+                  path: |
+                      build/gw2-collector/Release/d3d11.dll
+                      build/gw2-collector/collector-build.txt
+                  if-no-files-found: error
+                  retention-days: 7
