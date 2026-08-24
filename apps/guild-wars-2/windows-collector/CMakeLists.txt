@@ -10,6 +10,7 @@ set(SYSTEM_D3D11_DLL "$ENV{SystemRoot}/System32/d3d11.dll")
 set(GENERATED_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(GENERATED_PROXY_ASM "${GENERATED_DIRECTORY}/d3d11_proxy.asm")
 set(GENERATED_PROXY_DEF "${GENERATED_DIRECTORY}/d3d11_proxy.def")
+set(GENERATED_PROXY_EXPORTS_HEADER "${GENERATED_DIRECTORY}/d3d11_proxy_exports.h")
 
 if(NOT EXISTS "${SYSTEM_D3D11_DLL}")
     message(FATAL_ERROR "Could not locate the 64-bit system d3d11.dll at ${SYSTEM_D3D11_DLL}.")
@@ -22,6 +23,7 @@ execute_process(
         -ReferenceDll "${SYSTEM_D3D11_DLL}"
         -AssemblyOutput "${GENERATED_PROXY_ASM}"
         -DefinitionOutput "${GENERATED_PROXY_DEF}"
+        -HeaderOutput "${GENERATED_PROXY_EXPORTS_HEADER}"
     RESULT_VARIABLE GENERATE_PROXY_RESULT
     OUTPUT_VARIABLE GENERATE_PROXY_OUTPUT
     ERROR_VARIABLE GENERATE_PROXY_ERROR
@@ -45,6 +47,7 @@ add_library(theorymancer_d3d11_proxy SHARED
 target_compile_features(theorymancer_d3d11_proxy PRIVATE cxx_std_20)
 target_compile_definitions(theorymancer_d3d11_proxy PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(theorymancer_d3d11_proxy PRIVATE /W4 /WX /permissive-)
+target_include_directories(theorymancer_d3d11_proxy PRIVATE "${GENERATED_DIRECTORY}")
 target_link_libraries(theorymancer_d3d11_proxy PRIVATE user32)
 
 set_target_properties(theorymancer_d3d11_proxy PROPERTIES
@@ -60,6 +63,17 @@ if(BUILD_TESTING)
     target_compile_definitions(d3d11_proxy_smoke_test PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_compile_options(d3d11_proxy_smoke_test PRIVATE /W4 /WX /permissive-)
 
+    add_executable(d3d11_proxy_missing_export_test
+        tests/d3d11_proxy_missing_export_test.cpp
+        src/collector.cpp
+        src/d3d11_proxy.cpp
+    )
+    target_compile_features(d3d11_proxy_missing_export_test PRIVATE cxx_std_20)
+    target_compile_definitions(d3d11_proxy_missing_export_test PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(d3d11_proxy_missing_export_test PRIVATE /W4 /WX /permissive-)
+    target_include_directories(d3d11_proxy_missing_export_test PRIVATE "${GENERATED_DIRECTORY}")
+    target_link_libraries(d3d11_proxy_missing_export_test PRIVATE user32)
+
     add_test(
         NAME d3d11_proxy_exports
         COMMAND powershell -NoProfile -ExecutionPolicy Bypass
@@ -71,5 +85,9 @@ if(BUILD_TESTING)
     add_test(
         NAME d3d11_proxy_device_creation
         COMMAND d3d11_proxy_smoke_test "$<TARGET_FILE:theorymancer_d3d11_proxy>"
+    )
+    add_test(
+        NAME d3d11_proxy_missing_system_export
+        COMMAND d3d11_proxy_missing_export_test
     )
 endif()

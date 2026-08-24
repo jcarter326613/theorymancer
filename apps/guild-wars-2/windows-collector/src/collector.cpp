@@ -6,6 +6,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace theorymancer::gw2 {
 namespace {
@@ -53,6 +54,26 @@ void WriteDiagnostics() {
 
 void StartCollectorDiagnostics() {
     std::call_once(diagnostics_once, WriteDiagnostics);
+}
+
+void ReportMissingSystemD3D11Export(std::string_view export_name, std::uint32_t ordinal) {
+    const std::filesystem::path log_path = GetLogPath();
+    if (log_path.empty()) {
+        return;
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(log_path.parent_path(), error);
+    if (error) {
+        return;
+    }
+
+    std::ofstream log(log_path, std::ios::app);
+    if (!log) {
+        return;
+    }
+
+    log << "system_d3d11_export_missing ordinal=" << ordinal << " name=" << export_name << '\n';
 }
 
 } // namespace theorymancer::gw2

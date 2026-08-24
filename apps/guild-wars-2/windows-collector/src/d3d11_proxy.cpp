@@ -1,4 +1,5 @@
 #include "collector.h"
+#include "d3d11_proxy_exports.h"
 
 #include <windows.h>
 
@@ -29,11 +30,18 @@ FARPROC GetSystemExport(WORD ordinal) {
 } // namespace
 
 extern "C" FARPROC WINAPI ResolveD3D11Export(DWORD ordinal) {
+    const auto export_name = theorymancer::gw2::GetD3D11ProxyExportName(ordinal);
     if (ordinal > MAXWORD) {
+        theorymancer::gw2::ReportMissingSystemD3D11Export(export_name, ordinal);
         return nullptr;
     }
 
-    return GetSystemExport(static_cast<WORD>(ordinal));
+    const FARPROC export_address = GetSystemExport(static_cast<WORD>(ordinal));
+    if (export_address == nullptr) {
+        theorymancer::gw2::ReportMissingSystemD3D11Export(export_name, ordinal);
+    }
+
+    return export_address;
 }
 
 extern "C" void WINAPI StartCollectorDiagnosticsForD3D11Proxy() {

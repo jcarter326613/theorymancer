@@ -17,7 +17,16 @@ a diagnostic line to:
 
 It does not inspect Guild Wars 2 memory, capture combat events, render an
 overlay, change input, or make network requests. The diagnostic log only
-records the host executable path and process ID.
+records the host executable path and process ID. If a proxy-defined endpoint
+is absent from the end user's System32 DLL, it also records:
+
+```text
+system_d3d11_export_missing ordinal=<ordinal> name=<endpoint>
+```
+
+The proxy cannot add or remove its own exports at runtime, so this diagnostic
+does not alter `GetProcAddress` behavior. It makes a system-DLL mismatch
+actionable before the proxy fails the attempted call.
 
 ## Build
 

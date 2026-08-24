@@ -9,6 +9,9 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
     [string]$DefinitionOutput,
 
+    [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
+    [string]$HeaderOutput,
+
     [Parameter(Mandatory = $true, ParameterSetName = "Verify")]
     [string]$CandidateDll,
 
@@ -197,6 +200,21 @@ $definition.Add("LIBRARY d3d11")
 $definition.Add("")
 $definition.Add("EXPORTS")
 
+$header = [Collections.Generic.List[string]]::new()
+$header.Add("#pragma once")
+$header.Add("")
+$header.Add("#include <cstdint>")
+$header.Add("#include <string_view>")
+$header.Add("")
+$header.Add("namespace theorymancer::gw2 {")
+$header.Add("")
+$header.Add("struct D3D11ProxyExport {")
+$header.Add("    std::uint32_t ordinal;")
+$header.Add("    std::string_view name;")
+$header.Add("};")
+$header.Add("")
+$header.Add("inline constexpr D3D11ProxyExport kD3D11ProxyExports[] = {")
+
 foreach ($export in $referenceExports) {
     $symbol = "proxy_ordinal_$($export.Ordinal)"
     $recordDiagnostics = $export.Names -contains "D3D11CreateDevice" -or $export.Names -contains "D3D11CreateDeviceAndSwapChain"
@@ -211,16 +229,34 @@ foreach ($export in $referenceExports) {
 
     if ($export.Names.Count -eq 0) {
         $definition.Add("    $symbol @$($export.Ordinal) NONAME")
+        $header.Add("    { $($export.Ordinal), `"<ordinal-only>`" },")
     } else {
         $definition.Add("    $($export.Names[0])=$symbol @$($export.Ordinal)")
+        $escapedName = $export.Names[0].Replace('\', '\\').Replace('"', '\"')
+        $header.Add("    { $($export.Ordinal), `"$escapedName`" },")
     }
 }
 
 $assembly.Add("END")
+$header.Add("};")
+$header.Add("")
+$header.Add("inline std::string_view GetD3D11ProxyExportName(std::uint32_t ordinal) {")
+$header.Add("    for (const D3D11ProxyExport& export_entry : kD3D11ProxyExports) {")
+$header.Add("        if (export_entry.ordinal == ordinal) {")
+$header.Add("            return export_entry.name;")
+$header.Add("        }")
+$header.Add("    }")
+$header.Add("")
+$header.Add("    return `"<unknown>`";")
+$header.Add("}")
+$header.Add("")
+$header.Add("} // namespace theorymancer::gw2")
 
 $assemblyDirectory = Split-Path -Parent $AssemblyOutput
 $definitionDirectory = Split-Path -Parent $DefinitionOutput
-New-Item -ItemType Directory -Force -Path $assemblyDirectory, $definitionDirectory | Out-Null
+$headerDirectory = Split-Path -Parent $HeaderOutput
+New-Item -ItemType Directory -Force -Path $assemblyDirectory, $definitionDirectory, $headerDirectory | Out-Null
 Set-Content -Path $AssemblyOutput -Value $assembly -Encoding ascii
 Set-Content -Path $DefinitionOutput -Value $definition -Encoding ascii
+Set-Content -Path $HeaderOutput -Value $header -Encoding ascii
 Write-Output "Generated $($referenceExports.Count) D3D11 forwarding stubs from $ReferenceDll."
