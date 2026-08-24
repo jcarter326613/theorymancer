@@ -8,8 +8,6 @@ on:
             - ".github/workflows/guild-wars-2-desktop.yml"
             - "global.json"
     push:
-        branches:
-            - main
         paths:
             - "apps/guild-wars-2/desktop/**"
             - "apps/guild-wars-2/README.md"
