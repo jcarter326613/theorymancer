@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.IO;
 using Theorymancer.GuildWars2.Desktop.Ocr;
 
 namespace Theorymancer.GuildWars2.Desktop.Sessions;
