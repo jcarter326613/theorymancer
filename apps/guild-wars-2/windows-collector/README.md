@@ -28,6 +28,21 @@ The proxy cannot add or remove its own exports at runtime, so this diagnostic
 does not alter `GetProcAddress` behavior. It makes a system-DLL mismatch
 actionable before the proxy fails the attempted call.
 
+## Forwarding and overrides
+
+The generated export stubs are ABI-preserving assembly because they must accept
+an arbitrary D3D11 export signature before C++ code can run. The PowerShell
+generator only parses the reference PE export table and renders the checked-in
+files under `templates/`; it does not contain the dispatcher implementation.
+
+Each generic stub asks the C++ resolver for a target. The initial typed
+override registry in `src/d3d11_overrides.cpp` is deliberately empty, so every
+call reaches System32 unchanged. When a documented capture point is identified,
+add a typed C++ wrapper to that registry. The generic dispatcher will tail-call
+it with the original ABI, and the wrapper can call
+`ResolveSystemD3D11Export` to reach the real implementation without re-entering
+the proxy.
+
 ## Build
 
 Use a Windows developer command prompt with Visual Studio 2022 and CMake 3.24

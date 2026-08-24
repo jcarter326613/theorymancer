@@ -1,0 +1,27 @@
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace theorymancer::gw2 {
+
+struct D3D11ProxyExport {
+    std::uint32_t ordinal;
+    std::string_view name;
+};
+
+inline constexpr D3D11ProxyExport kD3D11ProxyExports[] = {
+{{EXPORT_METADATA}}
+};
+
+inline std::string_view GetD3D11ProxyExportName(std::uint32_t ordinal) {
+    for (const D3D11ProxyExport& export_entry : kD3D11ProxyExports) {
+        if (export_entry.ordinal == ordinal) {
+            return export_entry.name;
+        }
+    }
+
+    return "<unknown>";
+}
+
+} // namespace theorymancer::gw2

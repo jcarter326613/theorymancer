@@ -11,6 +11,7 @@ set(GENERATED_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(GENERATED_PROXY_ASM "${GENERATED_DIRECTORY}/d3d11_proxy.asm")
 set(GENERATED_PROXY_DEF "${GENERATED_DIRECTORY}/d3d11_proxy.def")
 set(GENERATED_PROXY_EXPORTS_HEADER "${GENERATED_DIRECTORY}/d3d11_proxy_exports.h")
+set(PROXY_TEMPLATE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/templates")
 
 if(NOT EXISTS "${SYSTEM_D3D11_DLL}")
     message(FATAL_ERROR "Could not locate the 64-bit system d3d11.dll at ${SYSTEM_D3D11_DLL}.")
@@ -24,6 +25,9 @@ execute_process(
         -AssemblyOutput "${GENERATED_PROXY_ASM}"
         -DefinitionOutput "${GENERATED_PROXY_DEF}"
         -HeaderOutput "${GENERATED_PROXY_EXPORTS_HEADER}"
+        -AssemblyTemplate "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy.asm.in"
+        -DefinitionTemplate "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy.def.in"
+        -HeaderTemplate "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy_exports.h.in"
     RESULT_VARIABLE GENERATE_PROXY_RESULT
     OUTPUT_VARIABLE GENERATE_PROXY_OUTPUT
     ERROR_VARIABLE GENERATE_PROXY_ERROR
@@ -35,11 +39,15 @@ if(NOT GENERATE_PROXY_RESULT EQUAL 0)
 endif()
 
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-d3d11-proxy.ps1")
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-d3d11-proxy.ps1"
+    "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy.asm.in"
+    "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy.def.in"
+    "${PROXY_TEMPLATE_DIRECTORY}/d3d11_proxy_exports.h.in")
 
 add_library(theorymancer_d3d11_proxy SHARED
     src/collector.cpp
     src/d3d11_proxy.cpp
+    src/d3d11_overrides.cpp
     "${GENERATED_PROXY_ASM}"
     "${GENERATED_PROXY_DEF}"
 )
@@ -71,12 +79,25 @@ if(BUILD_TESTING)
         tests/d3d11_proxy_missing_export_test.cpp
         src/collector.cpp
         src/d3d11_proxy.cpp
+        src/d3d11_overrides.cpp
     )
     target_compile_features(d3d11_proxy_missing_export_test PRIVATE cxx_std_20)
     target_compile_definitions(d3d11_proxy_missing_export_test PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_compile_options(d3d11_proxy_missing_export_test PRIVATE /W4 /WX /permissive-)
     target_include_directories(d3d11_proxy_missing_export_test PRIVATE "${GENERATED_DIRECTORY}")
     target_link_libraries(d3d11_proxy_missing_export_test PRIVATE user32)
+
+    add_executable(d3d11_proxy_override_registry_test
+        tests/d3d11_proxy_override_registry_test.cpp
+        src/d3d11_overrides.cpp
+    )
+    target_compile_features(d3d11_proxy_override_registry_test PRIVATE cxx_std_20)
+    target_compile_definitions(d3d11_proxy_override_registry_test PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(d3d11_proxy_override_registry_test PRIVATE /W4 /WX /permissive-)
+    target_include_directories(d3d11_proxy_override_registry_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${GENERATED_DIRECTORY}"
+    )
 
     add_test(
         NAME d3d11_proxy_exports
@@ -93,5 +114,9 @@ if(BUILD_TESTING)
     add_test(
         NAME d3d11_proxy_missing_system_export
         COMMAND d3d11_proxy_missing_export_test
+    )
+    add_test(
+        NAME d3d11_proxy_override_registry
+        COMMAND d3d11_proxy_override_registry_test
     )
 endif()

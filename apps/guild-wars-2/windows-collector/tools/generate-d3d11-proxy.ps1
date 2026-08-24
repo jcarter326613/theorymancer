@@ -12,6 +12,15 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
     [string]$HeaderOutput,
 
+    [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
+    [string]$AssemblyTemplate,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
+    [string]$DefinitionTemplate,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Generate")]
+    [string]$HeaderTemplate,
+
     [Parameter(Mandatory = $true, ParameterSetName = "Verify")]
     [string]$CandidateDll,
 
@@ -120,6 +129,19 @@ function Get-PeExports([string]$Path) {
     return @($exportsByOrdinal.Values | Sort-Object Ordinal)
 }
 
+function Render-Template([string]$TemplatePath, [string]$Marker, [string[]]$Replacement) {
+    $template = [IO.File]::ReadAllText($TemplatePath)
+    if ($template.IndexOf($Marker, [StringComparison]::Ordinal) -lt 0) {
+        throw "Template $TemplatePath does not contain $Marker."
+    }
+    if ($template.IndexOf($Marker, $template.IndexOf($Marker, [StringComparison]::Ordinal) + $Marker.Length,
+                         [StringComparison]::Ordinal) -ge 0) {
+        throw "Template $TemplatePath contains $Marker more than once."
+    }
+
+    return $template.Replace($Marker, [string]::Join("`r`n", $Replacement))
+}
+
 $referenceExports = Get-PeExports $ReferenceDll
 
 if ($Verify) {
@@ -151,112 +173,37 @@ foreach ($export in $referenceExports) {
     }
 }
 
-$assembly = [Collections.Generic.List[string]]::new()
-$assembly.Add("option casemap:none")
-$assembly.Add("")
-$assembly.Add("EXTERN ResolveD3D11Export:PROC")
-$assembly.Add("EXTERN StartCollectorDiagnosticsForD3D11Proxy:PROC")
-$assembly.Add("")
-$assembly.Add(".code")
-$assembly.Add("")
-$assembly.Add("ProxyDispatch PROC")
-$assembly.Add("    sub rsp, 152")
-$assembly.Add("    mov qword ptr [rsp + 32], rcx")
-$assembly.Add("    mov qword ptr [rsp + 40], rdx")
-$assembly.Add("    mov qword ptr [rsp + 48], r8")
-$assembly.Add("    mov qword ptr [rsp + 56], r9")
-$assembly.Add("    movdqu xmmword ptr [rsp + 64], xmm0")
-$assembly.Add("    movdqu xmmword ptr [rsp + 80], xmm1")
-$assembly.Add("    movdqu xmmword ptr [rsp + 96], xmm2")
-$assembly.Add("    movdqu xmmword ptr [rsp + 112], xmm3")
-$assembly.Add("    mov dword ptr [rsp + 136], r11d")
-$assembly.Add("    test r10d, r10d")
-$assembly.Add("    jz skip_diagnostics")
-$assembly.Add("    call StartCollectorDiagnosticsForD3D11Proxy")
-$assembly.Add("skip_diagnostics:")
-$assembly.Add("    mov ecx, dword ptr [rsp + 136]")
-$assembly.Add("    call ResolveD3D11Export")
-$assembly.Add("    test rax, rax")
-$assembly.Add("    jnz forward_export")
-$assembly.Add("    int 3")
-$assembly.Add("    ud2")
-$assembly.Add("forward_export:")
-$assembly.Add("    mov r10, rax")
-$assembly.Add("    movdqu xmm0, xmmword ptr [rsp + 64]")
-$assembly.Add("    movdqu xmm1, xmmword ptr [rsp + 80]")
-$assembly.Add("    movdqu xmm2, xmmword ptr [rsp + 96]")
-$assembly.Add("    movdqu xmm3, xmmword ptr [rsp + 112]")
-$assembly.Add("    mov rcx, qword ptr [rsp + 32]")
-$assembly.Add("    mov rdx, qword ptr [rsp + 40]")
-$assembly.Add("    mov r8, qword ptr [rsp + 48]")
-$assembly.Add("    mov r9, qword ptr [rsp + 56]")
-$assembly.Add("    add rsp, 152")
-$assembly.Add("    jmp r10")
-$assembly.Add("ProxyDispatch ENDP")
-$assembly.Add("")
-
-$definition = [Collections.Generic.List[string]]::new()
-$definition.Add("LIBRARY d3d11")
-$definition.Add("")
-$definition.Add("EXPORTS")
-
-$header = [Collections.Generic.List[string]]::new()
-$header.Add("#pragma once")
-$header.Add("")
-$header.Add("#include <cstdint>")
-$header.Add("#include <string_view>")
-$header.Add("")
-$header.Add("namespace theorymancer::gw2 {")
-$header.Add("")
-$header.Add("struct D3D11ProxyExport {")
-$header.Add("    std::uint32_t ordinal;")
-$header.Add("    std::string_view name;")
-$header.Add("};")
-$header.Add("")
-$header.Add("inline constexpr D3D11ProxyExport kD3D11ProxyExports[] = {")
+$assemblyStubs = [Collections.Generic.List[string]]::new()
+$definitionExports = [Collections.Generic.List[string]]::new()
+$headerExports = [Collections.Generic.List[string]]::new()
 
 foreach ($export in $referenceExports) {
     $symbol = "proxy_ordinal_$($export.Ordinal)"
     $recordDiagnostics = $export.Names -contains "D3D11CreateDevice" -or $export.Names -contains "D3D11CreateDeviceAndSwapChain"
     $diagnosticsFlag = if ($recordDiagnostics) { 1 } else { 0 }
-    $assembly.Add("PUBLIC $symbol")
-    $assembly.Add("$symbol PROC")
-    $assembly.Add("    mov r11d, $($export.Ordinal)")
-    $assembly.Add("    mov r10d, $diagnosticsFlag")
-    $assembly.Add("    jmp ProxyDispatch")
-    $assembly.Add("$symbol ENDP")
-    $assembly.Add("")
+    $assemblyStubs.Add("PUBLIC $symbol")
+    $assemblyStubs.Add("$symbol PROC")
+    $assemblyStubs.Add("    mov r11d, $($export.Ordinal)")
+    $assemblyStubs.Add("    mov r10d, $diagnosticsFlag")
+    $assemblyStubs.Add("    jmp ProxyDispatch")
+    $assemblyStubs.Add("$symbol ENDP")
+    $assemblyStubs.Add("")
 
     if ($export.Names.Count -eq 0) {
-        $definition.Add("    $symbol @$($export.Ordinal) NONAME")
-        $header.Add("    { $($export.Ordinal), `"<ordinal-only>`" },")
+        $definitionExports.Add("    $symbol @$($export.Ordinal) NONAME")
+        $headerExports.Add("    { $($export.Ordinal), `"<ordinal-only>`" },")
     } else {
-        $definition.Add("    $($export.Names[0])=$symbol @$($export.Ordinal)")
+        $definitionExports.Add("    $($export.Names[0])=$symbol @$($export.Ordinal)")
         $escapedName = $export.Names[0].Replace('\', '\\').Replace('"', '\"')
-        $header.Add("    { $($export.Ordinal), `"$escapedName`" },")
+        $headerExports.Add("    { $($export.Ordinal), `"$escapedName`" },")
     }
 }
-
-$assembly.Add("END")
-$header.Add("};")
-$header.Add("")
-$header.Add("inline std::string_view GetD3D11ProxyExportName(std::uint32_t ordinal) {")
-$header.Add("    for (const D3D11ProxyExport& export_entry : kD3D11ProxyExports) {")
-$header.Add("        if (export_entry.ordinal == ordinal) {")
-$header.Add("            return export_entry.name;")
-$header.Add("        }")
-$header.Add("    }")
-$header.Add("")
-$header.Add("    return `"<unknown>`";")
-$header.Add("}")
-$header.Add("")
-$header.Add("} // namespace theorymancer::gw2")
 
 $assemblyDirectory = Split-Path -Parent $AssemblyOutput
 $definitionDirectory = Split-Path -Parent $DefinitionOutput
 $headerDirectory = Split-Path -Parent $HeaderOutput
 New-Item -ItemType Directory -Force -Path $assemblyDirectory, $definitionDirectory, $headerDirectory | Out-Null
-Set-Content -Path $AssemblyOutput -Value $assembly -Encoding ascii
-Set-Content -Path $DefinitionOutput -Value $definition -Encoding ascii
-Set-Content -Path $HeaderOutput -Value $header -Encoding ascii
+Set-Content -Path $AssemblyOutput -Value (Render-Template $AssemblyTemplate "{{EXPORT_STUBS}}" $assemblyStubs) -Encoding ascii
+Set-Content -Path $DefinitionOutput -Value (Render-Template $DefinitionTemplate "{{EXPORT_DEFINITIONS}}" $definitionExports) -Encoding ascii
+Set-Content -Path $HeaderOutput -Value (Render-Template $HeaderTemplate "{{EXPORT_METADATA}}" $headerExports) -Encoding ascii
 Write-Output "Generated $($referenceExports.Count) D3D11 forwarding stubs from $ReferenceDll."

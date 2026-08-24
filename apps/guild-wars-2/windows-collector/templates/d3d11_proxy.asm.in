@@ -1,0 +1,44 @@
+option casemap:none
+
+EXTERN ResolveD3D11Export:PROC
+EXTERN StartCollectorDiagnosticsForD3D11Proxy:PROC
+
+.code
+
+ProxyDispatch PROC
+    sub rsp, 152
+    mov qword ptr [rsp + 32], rcx
+    mov qword ptr [rsp + 40], rdx
+    mov qword ptr [rsp + 48], r8
+    mov qword ptr [rsp + 56], r9
+    movdqu xmmword ptr [rsp + 64], xmm0
+    movdqu xmmword ptr [rsp + 80], xmm1
+    movdqu xmmword ptr [rsp + 96], xmm2
+    movdqu xmmword ptr [rsp + 112], xmm3
+    mov dword ptr [rsp + 136], r11d
+    test r10d, r10d
+    jz skip_diagnostics
+    call StartCollectorDiagnosticsForD3D11Proxy
+skip_diagnostics:
+    mov ecx, dword ptr [rsp + 136]
+    call ResolveD3D11Export
+    test rax, rax
+    jnz forward_export
+    int 3
+    ud2
+forward_export:
+    mov r10, rax
+    movdqu xmm0, xmmword ptr [rsp + 64]
+    movdqu xmm1, xmmword ptr [rsp + 80]
+    movdqu xmm2, xmmword ptr [rsp + 96]
+    movdqu xmm3, xmmword ptr [rsp + 112]
+    mov rcx, qword ptr [rsp + 32]
+    mov rdx, qword ptr [rsp + 40]
+    mov r8, qword ptr [rsp + 48]
+    mov r9, qword ptr [rsp + 56]
+    add rsp, 152
+    jmp r10
+ProxyDispatch ENDP
+
+{{EXPORT_STUBS}}
+END

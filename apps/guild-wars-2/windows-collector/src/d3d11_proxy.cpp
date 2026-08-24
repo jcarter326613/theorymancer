@@ -1,9 +1,12 @@
 #include "collector.h"
+#include "d3d11_overrides.h"
 #include "d3d11_proxy_exports.h"
+#include "d3d11_system.h"
 
 #include <windows.h>
 
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -27,10 +30,33 @@ FARPROC GetSystemExport(WORD ordinal) {
     return system_d3d11 == nullptr ? nullptr : GetProcAddress(system_d3d11, MAKEINTRESOURCEA(ordinal));
 }
 
+FARPROC GetSystemExport(std::string_view export_name) {
+    if (export_name.empty()) {
+        return nullptr;
+    }
+
+    InitOnceExecuteOnce(&system_d3d11_once, LoadSystemD3D11, nullptr, nullptr);
+    const std::string export_name_copy(export_name);
+    return system_d3d11 == nullptr ? nullptr : GetProcAddress(system_d3d11, export_name_copy.c_str());
+}
+
 } // namespace
+
+namespace theorymancer::gw2 {
+
+FARPROC ResolveSystemD3D11Export(std::string_view export_name) {
+    return GetSystemExport(export_name);
+}
+
+} // namespace theorymancer::gw2
 
 extern "C" FARPROC WINAPI ResolveD3D11Export(DWORD ordinal) {
     const auto export_name = theorymancer::gw2::GetD3D11ProxyExportName(ordinal);
+    const FARPROC override_target = theorymancer::gw2::GetD3D11Override(export_name);
+    if (override_target != nullptr) {
+        return override_target;
+    }
+
     if (ordinal > MAXWORD) {
         theorymancer::gw2::ReportMissingSystemD3D11Export(export_name, ordinal);
         return nullptr;
