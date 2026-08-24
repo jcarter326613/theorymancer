@@ -19,11 +19,19 @@ project. Create one GCS bucket before initializing Terraform; Terraform cannot
 store state in a bucket that it has not yet created.
 
 ```bash
-gcloud storage buckets create gs://YOUR_TF_STATE_BUCKET --location=us-east1
+gcloud storage buckets create gs://theorymancer-terraform-state \
+  --project=theorymancer \
+  --location=us-east1 \
+  --default-storage-class=STANDARD \
+  --uniform-bucket-level-access \
+  --public-access-prevention
+gcloud storage buckets update gs://theorymancer-terraform-state --versioning
 ```
 
-The state bucket name is not a secret. Use the same bucket for all roots with
-the distinct prefixes committed in their `backend.hcl` files.
+The shared state bucket is `theorymancer-terraform-state`. It has uniform
+bucket-level access, public-access prevention, and object versioning enabled.
+Use it for all roots with the distinct prefixes committed in their
+`backend.hcl` files.
 
 ## Bootstrap
 
