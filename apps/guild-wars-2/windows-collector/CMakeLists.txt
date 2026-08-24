@@ -46,7 +46,11 @@ add_library(theorymancer_d3d11_proxy SHARED
 
 target_compile_features(theorymancer_d3d11_proxy PRIVATE cxx_std_20)
 target_compile_definitions(theorymancer_d3d11_proxy PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(theorymancer_d3d11_proxy PRIVATE /W4 /WX /permissive-)
+target_compile_options(theorymancer_d3d11_proxy PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:/W4>
+    $<$<COMPILE_LANGUAGE:CXX>:/WX>
+    $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+)
 target_include_directories(theorymancer_d3d11_proxy PRIVATE "${GENERATED_DIRECTORY}")
 target_link_libraries(theorymancer_d3d11_proxy PRIVATE user32)
 
