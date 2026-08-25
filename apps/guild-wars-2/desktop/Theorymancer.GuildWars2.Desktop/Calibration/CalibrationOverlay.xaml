@@ -7,18 +7,16 @@
         Topmost="True"
         ShowInTaskbar="False"
         KeyDown="OnKeyDown">
-  <Canvas x:Name="OverlayCanvas"
-          Cursor="Cross"
-          MouseLeftButtonDown="OnMouseLeftButtonDown"
-          MouseMove="OnMouseMove"
-          MouseLeftButtonUp="OnMouseLeftButtonUp">
-    <Rectangle x:Name="SelectionRectangle"
-               Stroke="#FF3FA9F5"
-               StrokeThickness="2"
-               Fill="#223FA9F5"
-               Visibility="Collapsed" />
-    <Border Canvas.Left="20" Canvas.Top="20" Padding="12" Background="#D9111111" CornerRadius="4">
-      <TextBlock Foreground="White" Text="Drag around the visible combat-log panel. Press Escape to cancel." />
+  <Grid>
+    <Canvas x:Name="OverlayCanvas"
+           Background="#01000000"
+           Cursor="Cross"
+           MouseLeftButtonDown="OnMouseLeftButtonDown"
+           MouseMove="OnMouseMove"
+           MouseLeftButtonUp="OnMouseLeftButtonUp"
+           MouseRightButtonDown="OnMouseRightButtonDown" />
+    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20" Padding="12" Background="#D9111111" CornerRadius="4" IsHitTestVisible="False">
+      <TextBlock Foreground="White" Text="Drag empty space to create a region. Drag a region to move it. Right-click a region to delete it. Confirm or cancel from the collector window." />
     </Border>
-  </Canvas>
+  </Grid>
 </Window>

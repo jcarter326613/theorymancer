@@ -3,26 +3,49 @@ using System.IO;
 
 namespace Theorymancer.GuildWars2.Desktop.Calibration;
 
-public sealed record CollectorSettings(NormalizedCrop? Crop, int RowHeightPixels)
+public sealed record CollectorSettings(IReadOnlyList<CalibratedRegion> Regions, int RowHeightPixels)
 {
-    public static CollectorSettings Default { get; } = new(Crop: null, RowHeightPixels: 20);
+    public static CollectorSettings Default { get; } = new(Array.Empty<CalibratedRegion>(), RowHeightPixels: 20);
+
+    public NormalizedCrop? CombatLogCrop => Regions
+        .FirstOrDefault(region => region.Id == CalibratedRegion.CombatLogId)
+        ?.Crop;
 }
 
 public sealed class CollectorSettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private readonly string _path = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Theorymancer",
-        "guild-wars-2-screen-collector.json");
+    private readonly string _path;
+
+    public CollectorSettingsStore(string? path = null)
+    {
+        _path = path ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Theorymancer",
+            "guild-wars-2-screen-collector.json");
+    }
 
     public CollectorSettings Load()
     {
         try
         {
-            return JsonSerializer.Deserialize<CollectorSettings>(File.ReadAllText(_path), JsonOptions) ??
-                CollectorSettings.Default;
+            var json = File.ReadAllText(_path);
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("Regions", out _))
+            {
+                var settings = JsonSerializer.Deserialize<CollectorSettings>(json, JsonOptions);
+                return settings?.Regions is not null ? settings : CollectorSettings.Default;
+            }
+
+            var legacySettings = JsonSerializer.Deserialize<LegacyCollectorSettings>(json, JsonOptions);
+            return legacySettings?.Crop is { } crop
+                ? new CollectorSettings(
+                    [new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", crop)],
+                    legacySettings.RowHeightPixels)
+                : legacySettings is not null
+                    ? new CollectorSettings(Array.Empty<CalibratedRegion>(), legacySettings.RowHeightPixels)
+                    : CollectorSettings.Default;
         }
         catch (IOException)
         {
@@ -41,4 +64,6 @@ public sealed class CollectorSettingsStore
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(settings, JsonOptions));
         File.Move(temporaryPath, _path, overwrite: true);
     }
+
+    private sealed record LegacyCollectorSettings(NormalizedCrop? Crop, int RowHeightPixels);
 }

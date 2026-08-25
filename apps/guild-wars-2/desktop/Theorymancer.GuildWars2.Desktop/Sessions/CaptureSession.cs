@@ -36,7 +36,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
 
     public static async Task<CaptureSession> StartAsync(SelectedGameWindow gameWindow, CollectorSettings settings)
     {
-        if (settings.Crop is null)
+        if (settings.CombatLogCrop is null)
         {
             throw new InvalidOperationException("Calibrate a combat-log crop before recording.");
         }
@@ -44,7 +44,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         var writer = await SessionWriter.CreateAsync();
         try
         {
-            var capture = new VisibleScreenRegionCapture(gameWindow, settings.Crop);
+            var capture = new VisibleScreenRegionCapture(gameWindow, settings.CombatLogCrop);
             var detector = new RowChangeDetector(settings.RowHeightPixels);
             CaptureSession? session = null;
             var ocrWorker = new OcrWorker(

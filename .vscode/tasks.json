@@ -36,6 +36,17 @@
                 "group": "theorymancer",
                 "panel": "dedicated"
             }
+        },
+        {
+            "label": "build Guild Wars 2 screen collector",
+            "type": "process",
+            "command": "${env:ProgramFiles}\\dotnet\\dotnet.exe",
+            "args": [
+                "build",
+                "${workspaceFolder}/apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
         }
     ]
 }

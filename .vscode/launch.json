@@ -15,6 +15,17 @@
             "url": "http://localhost:5173",
             "webRoot": "${workspaceFolder}/apps/web",
             "preLaunchTask": "Dev: All"
+        },
+        {
+            "name": "Debug Guild Wars 2 Screen Collector",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Guild Wars 2 screen collector",
+            "program": "${workspaceFolder}/apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/bin/Debug/net10.0-windows10.0.19041.0/TheorymancerScreenCollector.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop",
+            "stopAtEntry": false,
+            "justMyCode": true
         }
     ]
 }

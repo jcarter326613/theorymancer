@@ -12,7 +12,7 @@
       <RowDefinition Height="Auto" />
       <RowDefinition Height="12" />
       <RowDefinition Height="Auto" />
-      <RowDefinition Height="12" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="12" />
       <RowDefinition Height="Auto" />
@@ -42,6 +42,12 @@
       </StackPanel>
       <TextBlock Grid.Column="5" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
     </Grid>
+
+    <StackPanel x:Name="CalibrationControls" Grid.Row="3" Margin="0,8,0,0" Orientation="Horizontal" Visibility="Collapsed">
+      <TextBlock x:Name="CalibrationStatusText" VerticalAlignment="Center" Foreground="DimGray" />
+      <Button x:Name="ConfirmCalibrationButton" Margin="12,0,0,0" Padding="12,6" Click="ConfirmCalibration_Click" Content="Confirm calibration" IsEnabled="False" />
+      <Button Margin="8,0,0,0" Padding="12,6" Click="CancelCalibration_Click" Content="Cancel calibration" />
+    </StackPanel>
 
     <ListBox x:Name="ActivityList" Grid.Row="4" FontFamily="Consolas" FontSize="12" />
 

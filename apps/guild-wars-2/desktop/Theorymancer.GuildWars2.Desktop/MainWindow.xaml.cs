@@ -14,6 +14,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CollectorSettingsStore _settingsStore = new();
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
+    private CalibrationOverlay? _calibrationOverlay;
     private CaptureSession? _captureSession;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate its combat-log crop.";
     private string _captureStatus = "Not recording";
@@ -54,6 +55,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Calibrate_Click(object sender, RoutedEventArgs e)
     {
+        if (_calibrationOverlay is not null)
+        {
+            SetupStatus = "Calibration is already active on the selected game window.";
+            return;
+        }
+
         if (_selectedWindow is null)
         {
             ShowSetupError("Select the Guild Wars 2 window before calibrating.");
@@ -71,22 +78,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var overlay = new CalibrationOverlay(clientBounds) { Owner = this };
-        if (overlay.ShowDialog() != true || overlay.SelectedBounds is null)
+        var overlay = new CalibrationOverlay(clientBounds, _settings.Regions);
+        _calibrationOverlay = overlay;
+        overlay.RegionCountChanged += UpdateCalibrationControls;
+        overlay.Confirmed += regions =>
         {
-            return;
-        }
-
-        _settings = new CollectorSettings(
-            Crop: NormalizedCrop.FromScreenBounds(overlay.SelectedBounds.Value, clientBounds),
-            RowHeightPixels: rowHeight);
-        _settingsStore.Save(_settings);
-        SetupStatus = "Combat-log crop saved. Start capture when the dedicated combat tab is visible.";
+            _settings = _settings with { Regions = regions, RowHeightPixels = rowHeight };
+            _settingsStore.Save(_settings);
+            SetupStatus = "Calibration saved. Start capture when the dedicated combat tab is visible.";
+            EndCalibration();
+        };
+        overlay.Cancelled += () =>
+        {
+            SetupStatus = "Calibration canceled.";
+            EndCalibration();
+        };
+        UpdateCalibrationControls(overlay.RegionCount);
+        overlay.Show();
+        SetupStatus = "Calibration is active. Draw or move regions on the Guild Wars 2 window, then confirm here.";
     }
+
+    private void ConfirmCalibration_Click(object sender, RoutedEventArgs e) => _calibrationOverlay?.Confirm();
+
+    private void CancelCalibration_Click(object sender, RoutedEventArgs e) => _calibrationOverlay?.Cancel();
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedWindow is null || _settings.Crop is null)
+        if (_selectedWindow is null || _settings.CombatLogCrop is null)
         {
             ShowSetupError("Select the GW2 window and calibrate the combat-log crop before recording.");
             return;
@@ -131,7 +149,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
+        _calibrationOverlay?.Cancel();
         await StopCaptureAsync();
+    }
+
+    private void UpdateCalibrationControls(int regionCount)
+    {
+        CalibrationControls.Visibility = Visibility.Visible;
+        CalibrationStatusText.Text = regionCount == 0
+            ? "Draw the combat-log region on the game window."
+            : $"{regionCount} region(s) ready to confirm.";
+        ConfirmCalibrationButton.IsEnabled = regionCount > 0;
+    }
+
+    private void EndCalibration()
+    {
+        _calibrationOverlay = null;
+        CalibrationControls.Visibility = Visibility.Collapsed;
     }
 
     private async Task StopCaptureAsync()

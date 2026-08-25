@@ -6,6 +6,8 @@ namespace Theorymancer.GuildWars2.Desktop.Capture;
 
 public sealed record SelectedGameWindow(nint Handle, int ProcessId, string Title)
 {
+    public string DisplayName => $"{Title} (PID {ProcessId})";
+
     public bool TryGetClientBounds(out ScreenBounds bounds)
     {
         bounds = default;

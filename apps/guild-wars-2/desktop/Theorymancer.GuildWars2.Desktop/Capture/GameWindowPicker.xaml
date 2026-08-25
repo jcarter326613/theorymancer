@@ -15,9 +15,9 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
     <TextBlock TextWrapping="Wrap" Foreground="DimGray">
-      Select the running Guild Wars 2 window. The game must remain visible and unobscured while recording.
+      Select a running Guild Wars 2 window to highlight its client area. The game must remain visible and unobscured while recording.
     </TextBlock>
-    <ListBox x:Name="WindowList" Grid.Row="2" DisplayMemberPath="Title" SelectionChanged="WindowList_SelectionChanged" />
+    <ListBox x:Name="WindowList" Grid.Row="2" DisplayMemberPath="DisplayName" SelectionChanged="WindowList_SelectionChanged" />
     <DockPanel Grid.Row="4">
       <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="DimGray" Text="{Binding CandidateStatus}" />
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
