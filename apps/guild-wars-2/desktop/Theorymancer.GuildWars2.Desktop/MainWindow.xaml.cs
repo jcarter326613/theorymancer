@@ -1,7 +1,10 @@
 using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.Ocr;
@@ -16,6 +19,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private SelectedGameWindow? _selectedWindow;
     private CalibrationOverlay? _calibrationOverlay;
     private CaptureSession? _captureSession;
+    private bool _diagnosticsEnabled;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate its combat-log crop.";
     private string _captureStatus = "Not recording";
 
@@ -28,6 +32,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public ObservableCollection<string> ActivityLog { get; } = [];
 
     public string SetupStatus
     {
@@ -126,9 +132,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            _captureSession = await CaptureSession.StartAsync(_selectedWindow, _settings);
+            _captureSession = await CaptureSession.StartAsync(_selectedWindow, _settings, _diagnosticsEnabled);
             _captureSession.StatusChanged += CaptureSession_StatusChanged;
             _captureSession.LineRecognized += CaptureSession_LineRecognized;
+            _captureSession.DiagnosticsUpdated += CaptureSession_DiagnosticsUpdated;
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
             CaptureStatus = "Recording";
@@ -181,12 +188,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         StartButton.IsEnabled = true;
         StopButton.IsEnabled = false;
         CaptureStatus = "Not recording";
-        AddActivity("Recording stopped.");
+        AddActivity($"Recording stopped. {FormatStatistics(captureSession.Statistics)}");
     }
 
     private void CaptureSession_StatusChanged(string message)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(() =>
         {
             CaptureStatus = message;
             AddActivity(message);
@@ -195,7 +202,87 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void CaptureSession_LineRecognized(RecognizedCombatLogLine line)
     {
-        Dispatcher.Invoke(() => AddActivity($"{line.FirstSeenQpc}: {line.Text}"));
+        Dispatcher.BeginInvoke(() => AddActivity(line.Text));
+    }
+
+    private void CaptureSession_DiagnosticsUpdated(CaptureDiagnostics diagnostics)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_diagnosticsEnabled)
+            {
+                return;
+            }
+
+            DiagnosticsSummaryText.Text =
+                $"Frame: {diagnostics.CaptureWidth} x {diagnostics.CaptureHeight}\n" +
+                $"Row height: {diagnostics.RowHeightPixels}px\n" +
+                $"OCR input: {diagnostics.ProcessedPreviewFrame?.Frame.Width} x {diagnostics.ProcessedPreviewFrame?.Frame.Height}; " +
+                $"threshold {diagnostics.ProcessedPreviewFrame?.Threshold}\n" +
+                FormatStatistics(diagnostics.Statistics);
+            OriginalDiagnosticPreview.Source = diagnostics.OriginalPreviewFrame is { } frame
+                ? ToBitmapSource(frame)
+                : null;
+            ProcessedDiagnosticPreview.Source = diagnostics.ProcessedPreviewFrame is { } processed
+                ? ToBitmapSource(processed.Frame)
+                : null;
+        });
+    }
+
+    private async void RunDiagnosticOcr_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedWindow is null || _settings.CombatLogCrop is null)
+        {
+            ShowSetupError("Select the Guild Wars 2 window and calibrate the combat-log crop before running diagnostic OCR.");
+            return;
+        }
+
+        RunDiagnosticOcrButton.IsEnabled = false;
+        try
+        {
+            AddActivity("Running diagnostic OCR on the current combat-log crop.");
+            var capture = new VisibleScreenRegionCapture(_selectedWindow, _settings.CombatLogCrop);
+            var sourceFrame = await capture.CaptureAsync(CancellationToken.None);
+            var processedFrame = CombatLogImagePreprocessor.Process(sourceFrame);
+            var engine = WindowsCombatLogOcrEngine.CreateEnglish();
+            var lines = await engine.RecognizeAsync(sourceFrame, processedFrame.Frame, CancellationToken.None);
+
+            OriginalDiagnosticPreview.Source = ToBitmapSource(sourceFrame);
+            ProcessedDiagnosticPreview.Source = ToBitmapSource(processedFrame.Frame);
+            DiagnosticsSummaryText.Text =
+                $"Frame: {sourceFrame.Width} x {sourceFrame.Height}\n" +
+                $"OCR input: {processedFrame.Frame.Width} x {processedFrame.Frame.Height}; " +
+                $"threshold {processedFrame.Threshold}\n" +
+                $"Diagnostic OCR found {lines.Count} line(s).";
+            AddActivity($"Diagnostic OCR found {lines.Count} line(s).");
+            foreach (var line in lines)
+            {
+                AddActivity(line.Text);
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowSetupError($"Diagnostic OCR failed: {exception.Message}");
+        }
+        finally
+        {
+            RunDiagnosticOcrButton.IsEnabled = true;
+        }
+    }
+
+    private void DiagnosticsCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        _diagnosticsEnabled = DiagnosticsCheckBox.IsChecked == true;
+        DiagnosticsPanel.Visibility = _diagnosticsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        _captureSession?.SetDiagnosticsEnabled(_diagnosticsEnabled);
+        if (!_diagnosticsEnabled)
+        {
+            DiagnosticsSummaryText.Text = string.Empty;
+            OriginalDiagnosticPreview.Source = null;
+            ProcessedDiagnosticPreview.Source = null;
+        }
+
+        AddActivity(_diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.");
     }
 
     private bool TryGetRowHeight(out int rowHeight)
@@ -218,11 +305,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void AddActivity(string message)
     {
-        ActivityList.Items.Insert(0, $"{DateTimeOffset.Now:HH:mm:ss}  {message}");
-        while (ActivityList.Items.Count > 100)
+        ActivityLog.Add($"{DateTimeOffset.Now:HH:mm:ss}  {message}");
+        while (ActivityLog.Count > 500)
         {
-            ActivityList.Items.RemoveAt(ActivityList.Items.Count - 1);
+            ActivityLog.RemoveAt(0);
         }
+
+        ActivityList.ScrollIntoView(ActivityLog[^1]);
+    }
+
+    private static string FormatStatistics(CaptureStatistics statistics) =>
+        $"Frames {statistics.FramesCaptured}; changed rows {statistics.ChangedRows}; " +
+        $"recognized {statistics.RecognizedLines}; OCR empty {statistics.EmptyOcrRows}; " +
+        $"dropped {statistics.DroppedOcrRows}.";
+
+    private static BitmapSource ToBitmapSource(CapturedFrame frame)
+    {
+        var source = BitmapSource.Create(
+            frame.Width,
+            frame.Height,
+            96,
+            96,
+            PixelFormats.Bgra32,
+            null,
+            frame.BgraPixels,
+            frame.Stride);
+        source.Freeze();
+        return source;
     }
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

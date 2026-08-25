@@ -8,25 +8,39 @@ namespace Theorymancer.GuildWars2.Desktop.Sessions;
 public sealed class CaptureSession : IAsyncDisposable, IDisposable
 {
     private const int TargetFramesPerSecond = 60;
+    private static readonly long DiagnosticIntervalTicks = Stopwatch.Frequency / 2;
+    private static readonly long OcrIntervalTicks = Stopwatch.Frequency / 4;
 
     private readonly IScreenRegionCapture _capture;
     private readonly RowChangeDetector _rowChangeDetector;
     private readonly SessionWriter _writer;
     private readonly OcrWorker _ocrWorker;
+    private readonly int _rowHeightPixels;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
+    private volatile bool _diagnosticsEnabled;
+    private long _framesCaptured;
+    private long _changedRows;
+    private long _lastDiagnosticQpc;
+    private long _lastOcrQpc;
+    private CapturedFrame? _latestChangedFrame;
+    private PreprocessedCombatLogFrame? _latestPreprocessedFrame;
     private bool _disposed;
 
     private CaptureSession(
         IScreenRegionCapture capture,
         RowChangeDetector rowChangeDetector,
         SessionWriter writer,
-        OcrWorker ocrWorker)
+        OcrWorker ocrWorker,
+        int rowHeightPixels,
+        bool diagnosticsEnabled)
     {
         _capture = capture;
         _rowChangeDetector = rowChangeDetector;
         _writer = writer;
         _ocrWorker = ocrWorker;
+        _rowHeightPixels = rowHeightPixels;
+        _diagnosticsEnabled = diagnosticsEnabled;
         _captureTask = Task.Run(CaptureLoopAsync);
     }
 
@@ -34,7 +48,12 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
 
     public event Action<RecognizedCombatLogLine>? LineRecognized;
 
-    public static async Task<CaptureSession> StartAsync(SelectedGameWindow gameWindow, CollectorSettings settings)
+    public event Action<CaptureDiagnostics>? DiagnosticsUpdated;
+
+    public static async Task<CaptureSession> StartAsync(
+        SelectedGameWindow gameWindow,
+        CollectorSettings settings,
+        bool diagnosticsEnabled)
     {
         if (settings.CombatLogCrop is null)
         {
@@ -54,8 +73,21 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                     await writer.WriteRecognizedLineAsync(line);
                     session?.LineRecognized?.Invoke(line);
                 },
+                preprocessed =>
+                {
+                    if (session is not null && session._diagnosticsEnabled)
+                    {
+                        session._latestPreprocessedFrame = preprocessed;
+                    }
+                },
                 message => session?.StatusChanged?.Invoke(message));
-            session = new CaptureSession(capture, detector, writer, ocrWorker);
+            session = new CaptureSession(
+                capture,
+                detector,
+                writer,
+                ocrWorker,
+                settings.RowHeightPixels,
+                diagnosticsEnabled);
             await writer.WriteAsync("capture_started", new
             {
                 target_frames_per_second = TargetFramesPerSecond,
@@ -100,6 +132,29 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
+    public CaptureStatistics Statistics => new(
+        Interlocked.Read(ref _framesCaptured),
+        Interlocked.Read(ref _changedRows),
+        _ocrWorker.RecognizedRows,
+        _ocrWorker.EmptyRows,
+        _ocrWorker.DroppedRows);
+
+    public void SetDiagnosticsEnabled(bool enabled)
+    {
+        _diagnosticsEnabled = enabled;
+        if (!enabled)
+        {
+            _latestPreprocessedFrame = null;
+            DiagnosticsUpdated?.Invoke(new CaptureDiagnostics(
+                Statistics,
+                0,
+                0,
+                _rowHeightPixels,
+                null,
+                null));
+        }
+    }
+
     private async Task CaptureLoopAsync()
     {
         var frameIntervalTicks = Stopwatch.Frequency / TargetFramesPerSecond;
@@ -109,10 +164,16 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
             while (!_cancellationTokenSource.IsCancellationRequested)
             {
                 var frame = await _capture.CaptureAsync(_cancellationTokenSource.Token);
-                foreach (var row in _rowChangeDetector.FindChangedRows(frame))
+                Interlocked.Increment(ref _framesCaptured);
+                var changedRows = _rowChangeDetector.FindChangedRows(frame);
+                Interlocked.Add(ref _changedRows, changedRows.Count);
+                if (changedRows.Count > 0)
                 {
-                    _ocrWorker.TryQueue(row);
+                    _latestChangedFrame = frame;
                 }
+
+                QueueLatestChangedFrame(frame.QpcTimestamp);
+                PublishDiagnostics(frame);
 
                 nextFrameTick += frameIntervalTicks;
                 var remainingTicks = nextFrameTick - Stopwatch.GetTimestamp();
@@ -134,6 +195,48 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         {
             StatusChanged?.Invoke($"Capture stopped: {exception.Message}");
             await _writer.WriteAsync("capture_error", new { message = exception.Message });
+        }
+    }
+
+    private void PublishDiagnostics(CapturedFrame frame)
+    {
+        if (!_diagnosticsEnabled || frame.QpcTimestamp - Interlocked.Read(ref _lastDiagnosticQpc) < DiagnosticIntervalTicks)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _lastDiagnosticQpc, frame.QpcTimestamp);
+        DiagnosticsUpdated?.Invoke(new CaptureDiagnostics(
+            Statistics,
+            frame.Width,
+            frame.Height,
+            _rowHeightPixels,
+            CreatePreviewFrame(frame),
+            _latestPreprocessedFrame));
+    }
+
+    private static CapturedFrame CreatePreviewFrame(CapturedFrame frame)
+    {
+        return frame with { BgraPixels = frame.BgraPixels.ToArray() };
+    }
+
+    private void QueueLatestChangedFrame(long qpcTimestamp)
+    {
+        if (_latestChangedFrame is not { } frame ||
+            qpcTimestamp - Interlocked.Read(ref _lastOcrQpc) < OcrIntervalTicks)
+        {
+            return;
+        }
+
+        if (_ocrWorker.TryQueue(frame))
+        {
+            Interlocked.Exchange(ref _lastOcrQpc, qpcTimestamp);
+            _latestChangedFrame = null;
+        }
+        else
+        {
+            // Keep the newest crop for the next attempt without repeatedly counting the same backlog.
+            Interlocked.Exchange(ref _lastOcrQpc, qpcTimestamp);
         }
     }
 }

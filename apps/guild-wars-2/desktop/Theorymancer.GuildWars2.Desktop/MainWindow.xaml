@@ -49,11 +49,38 @@
       <Button Margin="8,0,0,0" Padding="12,6" Click="CancelCalibration_Click" Content="Cancel calibration" />
     </StackPanel>
 
-    <ListBox x:Name="ActivityList" Grid.Row="4" FontFamily="Consolas" FontSize="12" />
+    <Grid Grid.Row="4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="280" />
+      </Grid.ColumnDefinitions>
+      <ListBox x:Name="ActivityList" FontFamily="Consolas" FontSize="12" ItemsSource="{Binding ActivityLog}" />
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
+      <Border x:Name="DiagnosticsPanel" Grid.Column="2" Padding="12" BorderBrush="Gainsboro" BorderThickness="1" Visibility="Collapsed">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Capture diagnostics" />
+            <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+            <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
+            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Original crop" />
+            <Border BorderBrush="Gainsboro" BorderThickness="1">
+              <Image x:Name="OriginalDiagnosticPreview" Stretch="Uniform" />
+            </Border>
+            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="OCR input" />
+            <Border BorderBrush="Gainsboro" BorderThickness="1">
+              <Image x:Name="ProcessedDiagnosticPreview" Stretch="Uniform" />
+            </Border>
+            <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Images remain in memory only while diagnostics are enabled." />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
 
     <DockPanel Grid.Row="6">
       <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding CaptureStatus}" />
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <CheckBox x:Name="DiagnosticsCheckBox" Margin="0,0,12,0" VerticalAlignment="Center" Checked="DiagnosticsCheckBox_Changed" Unchecked="DiagnosticsCheckBox_Changed" Content="Enable diagnostics" />
         <Button x:Name="StartButton" Padding="14,7" Click="Start_Click" Content="Start capture" />
         <Button x:Name="StopButton" Margin="8,0,0,0" Padding="14,7" Click="Stop_Click" Content="Stop capture" IsEnabled="False" />
       </StackPanel>

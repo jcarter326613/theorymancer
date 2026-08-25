@@ -28,5 +28,11 @@ dotnet publish apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorym
 The publish directory contains `TheorymancerScreenCollector.exe`, which can be
 started by double-clicking it.
 
+Recognized combat-log text appears in the collector's live activity log and is
+written locally as JSONL under
+`%LOCALAPPDATA%\Theorymancer\guild-wars-2\screen-capture-sessions`. Enable
+**Diagnostics** in the collector to inspect live capture and OCR counters plus
+an in-memory preview of the calibrated crop. Diagnostic previews are not saved.
+
 Game analysis workloads remain independent of the public website and API and
 may use Python or another runtime when their requirements justify it.

@@ -14,5 +14,8 @@ public sealed record RecognizedWord(string Text, double X, double Y, double Widt
 
 public interface ICombatLogOcrEngine
 {
-    Task<RecognizedCombatLogLine?> RecognizeAsync(ChangedRow row, CancellationToken cancellationToken);
+    Task<IReadOnlyList<RecognizedCombatLogLine>> RecognizeAsync(
+        CapturedFrame sourceFrame,
+        CapturedFrame ocrFrame,
+        CancellationToken cancellationToken);
 }

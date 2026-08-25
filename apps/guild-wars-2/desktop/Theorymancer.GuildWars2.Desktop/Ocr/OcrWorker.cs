@@ -5,8 +5,8 @@ namespace Theorymancer.GuildWars2.Desktop.Ocr;
 
 public sealed class OcrWorker : IAsyncDisposable
 {
-    private readonly Channel<ChangedRow> _queue = Channel.CreateBounded<ChangedRow>(
-        new BoundedChannelOptions(64)
+    private readonly Channel<CapturedFrame> _queue = Channel.CreateBounded<CapturedFrame>(
+        new BoundedChannelOptions(1)
         {
             FullMode = BoundedChannelFullMode.DropWrite,
             SingleReader = true,
@@ -14,25 +14,31 @@ public sealed class OcrWorker : IAsyncDisposable
         });
     private readonly ICombatLogOcrEngine _engine;
     private readonly Func<RecognizedCombatLogLine, Task> _onRecognized;
+    private readonly Action<PreprocessedCombatLogFrame> _onPreprocessed;
     private readonly Action<string> _onStatus;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _workerTask;
+    private readonly Dictionary<int, string> _previousTextByLine = [];
     private long _droppedRows;
+    private long _recognizedRows;
+    private long _emptyRows;
 
     public OcrWorker(
         ICombatLogOcrEngine engine,
         Func<RecognizedCombatLogLine, Task> onRecognized,
+        Action<PreprocessedCombatLogFrame> onPreprocessed,
         Action<string> onStatus)
     {
         _engine = engine;
         _onRecognized = onRecognized;
+        _onPreprocessed = onPreprocessed;
         _onStatus = onStatus;
         _workerTask = Task.Run(ProcessQueueAsync);
     }
 
-    public bool TryQueue(ChangedRow row)
+    public bool TryQueue(CapturedFrame frame)
     {
-        if (_queue.Writer.TryWrite(row))
+        if (_queue.Writer.TryWrite(frame))
         {
             return true;
         }
@@ -40,13 +46,17 @@ public sealed class OcrWorker : IAsyncDisposable
         var droppedRows = Interlocked.Increment(ref _droppedRows);
         if (droppedRows == 1 || droppedRows % 100 == 0)
         {
-            _onStatus($"OCR queue is full; skipped {droppedRows} changed row(s).");
+            _onStatus($"OCR queue is full; skipped {droppedRows} changed crop(s).");
         }
 
         return false;
     }
 
     public long DroppedRows => Interlocked.Read(ref _droppedRows);
+
+    public long RecognizedRows => Interlocked.Read(ref _recognizedRows);
+
+    public long EmptyRows => Interlocked.Read(ref _emptyRows);
 
     public async ValueTask DisposeAsync()
     {
@@ -69,11 +79,30 @@ public sealed class OcrWorker : IAsyncDisposable
     {
         try
         {
-            await foreach (var row in _queue.Reader.ReadAllAsync(_cancellationTokenSource.Token))
+            await foreach (var frame in _queue.Reader.ReadAllAsync(_cancellationTokenSource.Token))
             {
-                var line = await _engine.RecognizeAsync(row, _cancellationTokenSource.Token);
-                if (line is not null)
+                var preprocessed = CombatLogImagePreprocessor.Process(frame);
+                _onPreprocessed(preprocessed);
+                var lines = await _engine.RecognizeAsync(
+                    frame,
+                    preprocessed.Frame,
+                    _cancellationTokenSource.Token);
+                if (lines.Count == 0)
                 {
+                    Interlocked.Increment(ref _emptyRows);
+                    continue;
+                }
+
+                foreach (var line in lines)
+                {
+                    if (_previousTextByLine.TryGetValue(line.RowIndex, out var previousText) &&
+                        previousText == line.Text)
+                    {
+                        continue;
+                    }
+
+                    _previousTextByLine[line.RowIndex] = line.Text;
+                    Interlocked.Increment(ref _recognizedRows);
                     await _onRecognized(line);
                 }
             }

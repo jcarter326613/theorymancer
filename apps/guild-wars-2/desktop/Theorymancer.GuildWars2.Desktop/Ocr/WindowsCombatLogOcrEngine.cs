@@ -34,40 +34,39 @@ public sealed class WindowsCombatLogOcrEngine : ICombatLogOcrEngine
         return new WindowsCombatLogOcrEngine(engine);
     }
 
-    public async Task<RecognizedCombatLogLine?> RecognizeAsync(ChangedRow row, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RecognizedCombatLogLine>> RecognizeAsync(
+        CapturedFrame sourceFrame,
+        CapturedFrame ocrFrame,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var bitmap = new SoftwareBitmap(
             BitmapPixelFormat.Bgra8,
-            row.Width,
-            row.Height,
+            ocrFrame.Width,
+            ocrFrame.Height,
             BitmapAlphaMode.Premultiplied);
-        bitmap.CopyFromBuffer(CryptographicBuffer.CreateFromByteArray(row.BgraPixels));
+        bitmap.CopyFromBuffer(CryptographicBuffer.CreateFromByteArray(ocrFrame.BgraPixels));
         var result = await _engine.RecognizeAsync(bitmap);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var text = result.Text.Trim();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        var words = result.Lines
-            .SelectMany(line => line.Words)
-            .Select(word => new RecognizedWord(
-                word.Text,
-                word.BoundingRect.X,
-                word.BoundingRect.Y,
-                word.BoundingRect.Width,
-                word.BoundingRect.Height))
+        var frameHash = RowChangeDetector.Fnv1a64(sourceFrame.BgraPixels);
+        return result.Lines
+            .Select((line, lineIndex) => new { Line = line, Text = line.Text.Trim(), LineIndex = lineIndex })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Text))
+            .Select(item => new RecognizedCombatLogLine(
+                sourceFrame.QpcTimestamp,
+                item.LineIndex,
+                frameHash,
+                item.Text,
+                CombatLogColorClassifier.Classify(sourceFrame.BgraPixels),
+                item.Line.Words
+                    .Select(word => new RecognizedWord(
+                        word.Text,
+                        word.BoundingRect.X / CombatLogImagePreprocessor.ScaleFactor,
+                        word.BoundingRect.Y / CombatLogImagePreprocessor.ScaleFactor,
+                        word.BoundingRect.Width / CombatLogImagePreprocessor.ScaleFactor,
+                        word.BoundingRect.Height / CombatLogImagePreprocessor.ScaleFactor))
+                    .ToList()))
             .ToList();
-
-        return new RecognizedCombatLogLine(
-            row.FirstSeenQpc,
-            row.RowIndex,
-            row.PixelHash,
-            text,
-            CombatLogColorClassifier.Classify(row.BgraPixels),
-            words);
     }
 }
