@@ -20,6 +20,8 @@ public enum FrameMatchFeature
     LineEvidence,
     SequenceLength,
     RowOffsetConsistency,
+    DiscontinuousRowContinuity,
+    ConflictingContinuationContinuity,
     CurrentPrefixCoverage,
     OverlapConfidence,
 }
@@ -47,6 +49,8 @@ public sealed partial class CombatLogFrameMatcher
             [FrameMatchFeature.LineEvidence] = 0.50,
             [FrameMatchFeature.SequenceLength] = 0.20,
             [FrameMatchFeature.RowOffsetConsistency] = 0.25,
+            [FrameMatchFeature.DiscontinuousRowContinuity] = 0.25,
+            [FrameMatchFeature.ConflictingContinuationContinuity] = 0.25,
             [FrameMatchFeature.CurrentPrefixCoverage] = 0.05,
             [FrameMatchFeature.OverlapConfidence] = 0.85,
         };
@@ -59,50 +63,50 @@ public sealed partial class CombatLogFrameMatcher
             return new FrameMatchResult(FrameMatchDecision.Initial, current, 0, 1, 0);
         }
 
+        if (current.Count == 0)
+        {
+            ReplaceHistory(current);
+            return new FrameMatchResult(FrameMatchDecision.NoOverlap, current, 0, 1, 0);
+        }
+
         var bestLineSimilarity = 0.0;
         var similarities = new Dictionary<(int HistoryIndex, int CurrentIndex), double>();
         var candidateRowOffsets = new Dictionary<int, int>();
         var candidateLineCount = 0;
+        const int currentIndex = 0;
         for (var historyIndex = _history.Count - 1; historyIndex >= 0; historyIndex--)
         {
-            for (var currentIndex = 0; currentIndex < current.Count; currentIndex++)
+            if (current[currentIndex].RowIndex > _history[historyIndex].RowIndex)
             {
-                if (current[currentIndex].RowIndex > _history[historyIndex].RowIndex)
-                {
-                    break;
-                }
-
-                var similarity = LineSimilarity(_history[historyIndex], current[currentIndex]);
-                similarities[(historyIndex, currentIndex)] = similarity;
-                bestLineSimilarity = Math.Max(bestLineSimilarity, similarity);
-                if (similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
-                {
-                    continue;
-                }
-
-                var rowOffset = current[currentIndex].RowIndex - _history[historyIndex].RowIndex;
-                candidateRowOffsets[rowOffset] = candidateRowOffsets.GetValueOrDefault(rowOffset) + 1;
-                candidateLineCount++;
+                continue;
             }
+
+            var similarity = GetSimilarity(current, historyIndex, currentIndex, similarities);
+            bestLineSimilarity = Math.Max(bestLineSimilarity, similarity);
+            if (similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+            {
+                continue;
+            }
+
+            var rowOffset = current[currentIndex].RowIndex - _history[historyIndex].RowIndex;
+            candidateRowOffsets[rowOffset] = candidateRowOffsets.GetValueOrDefault(rowOffset) + 1;
+            candidateLineCount++;
         }
 
         Candidate? bestCandidate = null;
         for (var historyIndex = _history.Count - 1; historyIndex >= 0; historyIndex--)
         {
-            for (var currentIndex = current.Count - 1; currentIndex >= 0; currentIndex--)
+            if (!similarities.TryGetValue((historyIndex, currentIndex), out var similarity) ||
+                similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
-                if (!similarities.TryGetValue((historyIndex, currentIndex), out var similarity) ||
-                    similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                var candidate = ExpandCandidate(current, historyIndex, currentIndex, similarity, similarities);
-                var scoredCandidate = ScoreCandidate(candidate, current, candidateRowOffsets, candidateLineCount);
-                if (bestCandidate is null || scoredCandidate.IsBetterThan(bestCandidate))
-                {
-                    bestCandidate = scoredCandidate;
-                }
+            var candidate = ExpandCandidate(current, historyIndex, currentIndex, similarity, similarities);
+            var scoredCandidate = ScoreCandidate(candidate, current, candidateRowOffsets, candidateLineCount);
+            if (bestCandidate is null || scoredCandidate.IsBetterThan(bestCandidate))
+            {
+                bestCandidate = scoredCandidate;
             }
         }
 
@@ -113,8 +117,7 @@ public sealed partial class CombatLogFrameMatcher
             while (nextCurrentIndex < current.Count && nextHistoryIndex < _history.Count &&
                     AreAdjacent(_history[nextHistoryIndex - 1], _history[nextHistoryIndex]) &&
                     AreAdjacent(current[nextCurrentIndex - 1], current[nextCurrentIndex]) &&
-                    similarities.TryGetValue((nextHistoryIndex, nextCurrentIndex), out var similarity) &&
-                    similarity >= Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+                    GetSimilarity(current, nextHistoryIndex, nextCurrentIndex, similarities) >= Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
                 nextCurrentIndex++;
                 nextHistoryIndex++;
@@ -139,7 +142,7 @@ public sealed partial class CombatLogFrameMatcher
         int historyIndex,
         int currentIndex,
         double similarity,
-        IReadOnlyDictionary<(int HistoryIndex, int CurrentIndex), double> similarities)
+        IDictionary<(int HistoryIndex, int CurrentIndex), double> similarities)
     {
         var historyStart = historyIndex;
         var currentStart = currentIndex;
@@ -147,6 +150,7 @@ public sealed partial class CombatLogFrameMatcher
         var currentEnd = currentIndex;
         var similaritySum = similarity;
         var count = 1;
+        var rowContinuity = 1.0;
 
         while (historyStart > 0 && currentStart > 0)
         {
@@ -156,8 +160,8 @@ public sealed partial class CombatLogFrameMatcher
                 break;
             }
 
-            if (!similarities.TryGetValue((historyStart - 1, currentStart - 1), out var previousSimilarity) ||
-                previousSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+            var previousSimilarity = GetSimilarity(current, historyStart - 1, currentStart - 1, similarities);
+            if (previousSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
                 break;
             }
@@ -173,12 +177,18 @@ public sealed partial class CombatLogFrameMatcher
             if (!AreAdjacent(_history[historyEnd], _history[historyEnd + 1]) ||
                 !AreAdjacent(current[currentEnd], current[currentEnd + 1]))
             {
+                rowContinuity = Weight(FrameMatchFeature.DiscontinuousRowContinuity);
                 break;
             }
 
-            if (!similarities.TryGetValue((historyEnd + 1, currentEnd + 1), out var nextSimilarity) ||
-                nextSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+            var nextSimilarity = GetSimilarity(current, historyEnd + 1, currentEnd + 1, similarities);
+            if (nextSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
+                if (HasConflictingContinuation(_history[historyEnd + 1], current[currentEnd + 1]))
+                {
+                    rowContinuity = Weight(FrameMatchFeature.ConflictingContinuationContinuity);
+                }
+
                 break;
             }
 
@@ -196,6 +206,7 @@ public sealed partial class CombatLogFrameMatcher
             count,
             similaritySum / count,
             current[currentStart].RowIndex - _history[historyStart].RowIndex,
+            rowContinuity,
             0);
     }
 
@@ -208,6 +219,7 @@ public sealed partial class CombatLogFrameMatcher
         var rowOffsetConsistency = candidate.MatchedLineCount == 1
             ? (double)candidateRowOffsets.GetValueOrDefault(candidate.RowOffset) / candidateLineCount
             : 1;
+        rowOffsetConsistency *= candidate.RowContinuity;
         var sequenceEvidence = 1 - Math.Exp(-candidate.MatchedLineCount);
         var currentPrefixCoverage = 1 - (double)candidate.CurrentStart / current.Count;
         var confidence =
@@ -217,6 +229,27 @@ public sealed partial class CombatLogFrameMatcher
             currentPrefixCoverage * Weight(FrameMatchFeature.CurrentPrefixCoverage);
 
         return candidate with { Confidence = Math.Clamp(confidence, 0, 1) };
+    }
+
+    private double GetSimilarity(
+        IReadOnlyList<RecognizedCombatLogLine> current,
+        int historyIndex,
+        int currentIndex,
+        IDictionary<(int HistoryIndex, int CurrentIndex), double> similarities)
+    {
+        if (current[currentIndex].RowIndex > _history[historyIndex].RowIndex)
+        {
+            return 0;
+        }
+
+        if (similarities.TryGetValue((historyIndex, currentIndex), out var similarity))
+        {
+            return similarity;
+        }
+
+        similarity = LineSimilarity(_history[historyIndex], current[currentIndex]);
+        similarities[(historyIndex, currentIndex)] = similarity;
+        return similarity;
     }
 
     private static bool IsConfidentOverlap(Candidate candidate) =>
@@ -291,6 +324,12 @@ public sealed partial class CombatLogFrameMatcher
             : Weight(FrameMatchFeature.DifferentKnownColorPenalty);
     }
 
+    private static bool HasConflictingContinuation(RecognizedCombatLogLine history, RecognizedCombatLogLine current) =>
+        Normalize(history.Text) == Normalize(current.Text) &&
+        !string.Equals(history.ColorClass, "unknown", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(current.ColorClass, "unknown", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(history.ColorClass, current.ColorClass, StringComparison.OrdinalIgnoreCase);
+
     private static string Normalize(string text) => Whitespace().Replace(text.Trim().ToLowerInvariant(), " ");
 
     private static int LevenshteinDistance(string left, string right)
@@ -333,6 +372,7 @@ public sealed partial class CombatLogFrameMatcher
         int MatchedLineCount,
         double AverageSimilarity,
         int RowOffset,
+        double RowContinuity,
         double Confidence)
     {
         public bool IsBetterThan(Candidate other) =>

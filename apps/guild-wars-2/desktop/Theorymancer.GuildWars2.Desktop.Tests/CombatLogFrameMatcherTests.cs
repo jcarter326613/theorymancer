@@ -193,6 +193,13 @@ public sealed class CombatLogFrameMatcherTests
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 2,
             expectedLines: [Spec(2, "Ready.", "red")]);
+
+        yield return Case(
+            history: [Spec(4, "A.", "green"), Spec(5, "B.", "blue")],
+            current: [Spec(0, "New event.", "red"), Spec(1, "A.", "green"), Spec(2, "B.", "blue")],
+            decision: FrameMatchDecision.NoOverlap,
+            matchedLineCount: 0,
+            expectedLines: [Spec(0, "New event.", "red"), Spec(1, "A.", "green"), Spec(2, "B.", "blue")]);
     }
 
     private static object[] Case(
