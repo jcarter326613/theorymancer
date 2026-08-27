@@ -17,6 +17,7 @@ public sealed class OcrWorker : IAsyncDisposable
     private readonly Action<PreprocessedCombatLogFrame> _onPreprocessed;
     private readonly Action<FrameMatchResult> _onFrameMatched;
     private readonly Action<string> _onStatus;
+    private readonly Func<IReadOnlyList<RecognizedCombatLogLine>, Task> _onOcrCompleted;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _workerTask;
     private readonly CombatLogFrameMatcher _frameMatcher = new();
@@ -29,13 +30,15 @@ public sealed class OcrWorker : IAsyncDisposable
         Func<RecognizedCombatLogLine, Task> onRecognized,
         Action<PreprocessedCombatLogFrame> onPreprocessed,
         Action<FrameMatchResult> onFrameMatched,
-        Action<string> onStatus)
+        Action<string> onStatus,
+        Func<IReadOnlyList<RecognizedCombatLogLine>, Task>? onOcrCompleted = null)
     {
         _engine = engine;
         _onRecognized = onRecognized;
         _onPreprocessed = onPreprocessed;
         _onFrameMatched = onFrameMatched;
         _onStatus = onStatus;
+        _onOcrCompleted = onOcrCompleted ?? (_ => Task.CompletedTask);
         _workerTask = Task.Run(ProcessQueueAsync);
     }
 
@@ -90,6 +93,7 @@ public sealed class OcrWorker : IAsyncDisposable
                     frame,
                     preprocessed.Frame,
                     _cancellationTokenSource.Token);
+                await _onOcrCompleted(lines);
                 if (lines.Count == 0)
                 {
                     Interlocked.Increment(ref _emptyRows);

@@ -32,6 +32,34 @@ public sealed class OcrWorkerTests
         Assert.Equal(1, worker.EmptyRows);
     }
 
+    [Fact]
+    public async Task ProcessQueueAsync_ReportsEveryOcrResultBeforeFrameMatching()
+    {
+        var rawOcrResults = new List<IReadOnlyList<RecognizedCombatLogLine>>();
+        var line = new RecognizedCombatLogLine(1, 0, 1, "Recognized", "other", []);
+        await using var worker = new OcrWorker(
+            new StubOcrEngine([line], [line]),
+            _ => Task.CompletedTask,
+            _ => { },
+            _ => { },
+            _ => { },
+            lines =>
+            {
+                rawOcrResults.Add(lines);
+                return Task.CompletedTask;
+            });
+
+        Assert.True(worker.TryQueue(CreateFrame(0)));
+        await WaitUntilAsync(() => worker.RecognizedRows == 1);
+        Assert.True(worker.TryQueue(CreateFrame(1)));
+        await WaitUntilAsync(() => rawOcrResults.Count == 2);
+
+        Assert.Equal(2, rawOcrResults.Count);
+        Assert.Single(rawOcrResults[0]);
+        Assert.Single(rawOcrResults[1]);
+        Assert.Equal(1, worker.RecognizedRows);
+    }
+
     private static CapturedFrame CreateFrame(int timestamp) => new(
         QpcTimestamp: timestamp,
         Width: 1,

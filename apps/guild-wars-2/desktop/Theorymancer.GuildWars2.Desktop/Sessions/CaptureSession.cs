@@ -2,6 +2,7 @@ using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.Ocr;
 using System.Diagnostics;
+using System.IO;
 
 namespace Theorymancer.GuildWars2.Desktop.Sessions;
 
@@ -13,6 +14,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
     private readonly IScreenRegionCapture _capture;
     private readonly SessionWriter _writer;
     private readonly OcrWorker _ocrWorker;
+    private readonly OcrFrameDebugWriter _debugFrameWriter;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
     private volatile bool _diagnosticsEnabled;
@@ -27,11 +29,13 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         IScreenRegionCapture capture,
         SessionWriter writer,
         OcrWorker ocrWorker,
+        OcrFrameDebugWriter debugFrameWriter,
         bool diagnosticsEnabled)
     {
         _capture = capture;
         _writer = writer;
         _ocrWorker = ocrWorker;
+        _debugFrameWriter = debugFrameWriter;
         _diagnosticsEnabled = diagnosticsEnabled;
         _captureTask = Task.Run(CaptureLoopAsync);
     }
@@ -56,6 +60,12 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         try
         {
             var capture = new VisibleScreenRegionCapture(gameWindow, settings.CombatLogCrop);
+            var debugFrameWriter = new OcrFrameDebugWriter(Directory.GetCurrentDirectory(), DateTimeOffset.Now);
+            if (diagnosticsEnabled)
+            {
+                debugFrameWriter.EnsureSessionDirectory();
+            }
+
             CaptureSession? session = null;
             var ocrWorker = new OcrWorker(
                 WindowsCombatLogOcrEngine.CreateEnglish(),
@@ -78,11 +88,13 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                         session._latestFrameMatch = match;
                     }
                 },
-                message => session?.StatusChanged?.Invoke(message));
+                message => session?.StatusChanged?.Invoke(message),
+                lines => session?.WriteDebugOcrFrameAsync(lines) ?? Task.CompletedTask);
             session = new CaptureSession(
                 capture,
                 writer,
                 ocrWorker,
+                debugFrameWriter,
                 diagnosticsEnabled);
             await writer.WriteAsync("capture_started", new
             {
@@ -122,6 +134,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                 dropped_ocr_rows = _ocrWorker.DroppedRows,
             });
             await _writer.DisposeAsync();
+            _debugFrameWriter.Dispose();
             _cancellationTokenSource.Dispose();
         }
     }
@@ -217,4 +230,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
             Interlocked.Increment(ref _ocrFramesQueued);
         }
     }
+
+    private Task WriteDebugOcrFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines) =>
+        _diagnosticsEnabled ? _debugFrameWriter.WriteFrameAsync(lines) : Task.CompletedTask;
 }

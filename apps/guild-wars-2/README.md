@@ -32,7 +32,10 @@ Recognized combat-log text appears in the collector's live activity log and is
 written locally as JSONL under
 `%LOCALAPPDATA%\Theorymancer\guild-wars-2\screen-capture-sessions`. Enable
 **Diagnostics** in the collector to inspect live capture and OCR counters plus
-an in-memory preview of the calibrated crop. Diagnostic previews are not saved.
+an in-memory preview of the calibrated crop. While diagnostics is enabled, the
+collector also writes one JSON Lines raw-OCR file per processed frame under
+`debug-ocr-frames/<capture-start-timestamp>/` relative to its working directory.
+Diagnostic previews are not saved.
 
 Game analysis workloads remain independent of the public website and API and
 may use Python or another runtime when their requirements justify it.
