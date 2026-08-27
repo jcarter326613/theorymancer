@@ -72,7 +72,7 @@ public sealed class CombatLogFrameMatcherTests
          * So this is not a repeat of the old sequence.  This is a new sequence.
          */
         yield return Case(
-            history: [Spec(0, "G.", "green"), Spec(2, "H.", "blue")],
+            history: [Spec(0, "G.", "green"), Spec(1, "H.", "red")],
             current: [Spec(0, "G.", "green"), Spec(1, "H.", "blue"), Spec(2, "R.", "red")],
             decision: FrameMatchDecision.NoOverlap,
             matchedLineCount: 0,
