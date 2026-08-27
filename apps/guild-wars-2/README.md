@@ -30,9 +30,11 @@ started by double-clicking it.
 
 ## OCR Row Model
 
-Capture and frame matching operate on the visual rows returned by Windows OCR.
-Every non-empty OCR row is emitted as captured, including rows without terminal
-punctuation. Capture must not merge rows based on punctuation, word position,
+Capture and frame matching operate on physical visual rows. Windows OCR can
+split one rendered row where its text changes color, so adjacent OCR fragments
+within half a character height are reassembled left-to-right before capture.
+The resulting row receives one color classification based on its aggregated
+words. Capture must not merge rows based on punctuation, message text, color,
 or an assumed Guild Wars 2 message format. This keeps the UI faithful to the
 visible game log and prevents an uncertain OCR row from corrupting later rows.
 

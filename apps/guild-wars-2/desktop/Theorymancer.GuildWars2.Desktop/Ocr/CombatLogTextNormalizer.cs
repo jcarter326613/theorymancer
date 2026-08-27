@@ -7,9 +7,7 @@ public static partial class CombatLogTextNormalizer
     public static string AppendFragment(string existing, string fragment) =>
         string.IsNullOrWhiteSpace(existing) ? fragment.Trim() : $"{existing} {fragment.Trim()}";
 
-    public static bool IsCompleteLine(string text) => text.EndsWith(".", StringComparison.Ordinal);
-
-    public static string NormalizeCompletedLine(string text) => DigitCommaWhitespace().Replace(text.Trim(), ",");
+    public static string NormalizeVisualRow(string text) => DigitCommaWhitespace().Replace(text.Trim(), ",");
 
     [GeneratedRegex(@"(?<=\d)\s*,\s*(?=\d)")]
     private static partial Regex DigitCommaWhitespace();

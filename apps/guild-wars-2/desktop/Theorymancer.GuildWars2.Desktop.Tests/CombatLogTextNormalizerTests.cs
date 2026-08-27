@@ -13,25 +13,10 @@ public sealed class CombatLogTextNormalizerTests
     }
 
     [Fact]
-    public void NormalizeCompletedLine_RemovesWhitespaceAroundDigitCommas()
+    public void NormalizeVisualRow_RemovesWhitespaceAroundDigitCommas()
     {
-        var text = CombatLogTextNormalizer.NormalizeCompletedLine("You dealt 1 , 234 damage.");
+        var text = CombatLogTextNormalizer.NormalizeVisualRow("You dealt 1 , 234 damage.");
 
         Assert.Equal("You dealt 1,234 damage.", text);
-    }
-
-    [Fact]
-    public void IsCompleteLine_RejectsATrailingPartialFragment()
-    {
-        Assert.False(CombatLogTextNormalizer.IsCompleteLine("You dealt 1,234 damage"));
-    }
-
-    [Theory]
-    [InlineData("Screenshot saved as Wars")]
-    [InlineData("You critically hit Standard Kitty Golem for 1,681 using")]
-    [InlineData("You critically hit Standard Kitty Golem for 1,681 using [Bleed].")]
-    public void IsCompleteLine_AcceptsEveryVisualOcrRowRegardlessOfTerminalPunctuation(string visualRow)
-    {
-        Assert.True(CombatLogTextNormalizer.IsCompleteLine(visualRow));
     }
 }

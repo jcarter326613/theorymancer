@@ -20,7 +20,6 @@ public enum FrameMatchFeature
     LineEvidence,
     SequenceLength,
     RowOffsetConsistency,
-    DiscontinuousRowContinuity,
     ConflictingContinuationContinuity,
     CurrentPrefixCoverage,
     OverlapConfidence,
@@ -37,6 +36,7 @@ public sealed partial class CombatLogFrameMatcher
 {
     private const int MaximumHistoryLines = 200;
     private readonly List<RecognizedCombatLogLine> _history = [];
+    private IReadOnlyList<RecognizedCombatLogLine>? _previousViewport;
 
     public static IDictionary<FrameMatchFeature, double> FeatureWeights { get; } =
         new Dictionary<FrameMatchFeature, double>
@@ -49,7 +49,6 @@ public sealed partial class CombatLogFrameMatcher
             [FrameMatchFeature.LineEvidence] = 0.50,
             [FrameMatchFeature.SequenceLength] = 0.20,
             [FrameMatchFeature.RowOffsetConsistency] = 0.25,
-            [FrameMatchFeature.DiscontinuousRowContinuity] = 0.25,
             [FrameMatchFeature.ConflictingContinuationContinuity] = 0.25,
             [FrameMatchFeature.CurrentPrefixCoverage] = 0.05,
             [FrameMatchFeature.OverlapConfidence] = 0.85,
@@ -57,15 +56,23 @@ public sealed partial class CombatLogFrameMatcher
 
     public FrameMatchResult Match(IReadOnlyList<RecognizedCombatLogLine> current)
     {
+        if (_previousViewport is not null && SameViewport(_previousViewport, current))
+        {
+            RememberViewport(current);
+            return new FrameMatchResult(FrameMatchDecision.Overlap, [], current.Count, 1, 1);
+        }
+
         if (_history.Count == 0)
         {
             ReplaceHistory(current);
+            RememberViewport(current);
             return new FrameMatchResult(FrameMatchDecision.Initial, current, 0, 1, 0);
         }
 
         if (current.Count == 0)
         {
             ReplaceHistory(current);
+            RememberViewport(current);
             return new FrameMatchResult(FrameMatchDecision.NoOverlap, current, 0, 1, 0);
         }
 
@@ -115,7 +122,7 @@ public sealed partial class CombatLogFrameMatcher
             var nextCurrentIndex = bestCandidate.CurrentEnd + 1;
             var nextHistoryIndex = bestCandidate.HistoryEnd + 1;
             while (nextCurrentIndex < current.Count && nextHistoryIndex < _history.Count &&
-                    AreAdjacent(_history[nextHistoryIndex - 1], _history[nextHistoryIndex]) &&
+                    AreConsecutiveHistoryLines(_history[nextHistoryIndex - 1], _history[nextHistoryIndex]) &&
                     AreAdjacent(current[nextCurrentIndex - 1], current[nextCurrentIndex]) &&
                     GetSimilarity(current, nextHistoryIndex, nextCurrentIndex, similarities) >= Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
@@ -125,6 +132,7 @@ public sealed partial class CombatLogFrameMatcher
 
             var newLines = current.Skip(nextCurrentIndex).ToList();
             AppendHistory(newLines);
+            RememberViewport(current);
             return new FrameMatchResult(
                 FrameMatchDecision.Overlap,
                 newLines,
@@ -134,6 +142,7 @@ public sealed partial class CombatLogFrameMatcher
         }
 
         ReplaceHistory(current);
+        RememberViewport(current);
         return new FrameMatchResult(FrameMatchDecision.NoOverlap, current, 0, 1 - bestLineSimilarity, bestLineSimilarity);
     }
 
@@ -174,10 +183,9 @@ public sealed partial class CombatLogFrameMatcher
 
         while (historyEnd + 1 < _history.Count && currentEnd + 1 < current.Count)
         {
-            if (!AreAdjacent(_history[historyEnd], _history[historyEnd + 1]) ||
+            if (!AreConsecutiveHistoryLines(_history[historyEnd], _history[historyEnd + 1]) ||
                 !AreAdjacent(current[currentEnd], current[currentEnd + 1]))
             {
-                rowContinuity = Weight(FrameMatchFeature.DiscontinuousRowContinuity);
                 break;
             }
 
@@ -274,6 +282,22 @@ public sealed partial class CombatLogFrameMatcher
 
     private static bool AreAdjacent(RecognizedCombatLogLine first, RecognizedCombatLogLine second) =>
         second.RowIndex == first.RowIndex + 1;
+
+    // Row indices restart for each OCR frame; later-frame additions are nevertheless chronological history.
+    private static bool AreConsecutiveHistoryLines(RecognizedCombatLogLine first, RecognizedCombatLogLine second) =>
+        AreAdjacent(first, second) || first.FirstSeenQpc != second.FirstSeenQpc;
+
+    private static bool SameViewport(
+        IReadOnlyList<RecognizedCombatLogLine> previous,
+        IReadOnlyList<RecognizedCombatLogLine> current) =>
+        previous.Count == current.Count &&
+        previous.Zip(current).All(pair =>
+            pair.First.RowIndex == pair.Second.RowIndex &&
+            Normalize(pair.First.Text) == Normalize(pair.Second.Text) &&
+            string.Equals(pair.First.ColorClass, pair.Second.ColorClass, StringComparison.OrdinalIgnoreCase));
+
+    private void RememberViewport(IReadOnlyList<RecognizedCombatLogLine> viewport) =>
+        _previousViewport = viewport.ToList();
 
     private static double LineSimilarity(RecognizedCombatLogLine left, RecognizedCombatLogLine right)
     {

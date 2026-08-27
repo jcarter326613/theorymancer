@@ -215,6 +215,67 @@ public sealed class CombatLogFrameMatcherTests
         Assert.Empty(result.LinesToEmit);
     }
 
+    [Fact]
+    public void Match_DoesNotReemitShiftedViewportAfterHistoryCrossesFrameBoundary()
+    {
+        var matcher = new CombatLogFrameMatcher();
+        _ = matcher.Match(
+        [
+            Line(Spec(0, "A.", "red", firstSeenQpc: 100)),
+            Line(Spec(1, "B.", "green", firstSeenQpc: 100)),
+            Line(Spec(2, "C.", "blue", firstSeenQpc: 100)),
+            Line(Spec(3, "D.", "red", firstSeenQpc: 100)),
+        ]);
+        var shiftedViewport = new[]
+        {
+            Line(Spec(0, "B.", "green", firstSeenQpc: 200)),
+            Line(Spec(1, "C.", "blue", firstSeenQpc: 200)),
+            Line(Spec(2, "D.", "red", firstSeenQpc: 200)),
+            Line(Spec(3, "E.", "green", firstSeenQpc: 200)),
+        };
+
+        var shifted = matcher.Match(shiftedViewport);
+        var repeated = matcher.Match(shiftedViewport.Select(line => line with { FirstSeenQpc = 300 }).ToList());
+
+        Assert.Equal(FrameMatchDecision.Overlap, shifted.Decision);
+        Assert.Equal(["E."], shifted.LinesToEmit.Select(line => line.Text));
+        Assert.Equal(FrameMatchDecision.Overlap, repeated.Decision);
+        Assert.Equal(4, repeated.MatchedLineCount);
+        Assert.Empty(repeated.LinesToEmit);
+    }
+
+    [Fact]
+    public void Match_DoesNotReemitUnchangedViewportAfterAnOcrGap()
+    {
+        var matcher = new CombatLogFrameMatcher();
+        _ = matcher.Match(
+        [
+            Line(Spec(0, "A.", "red", firstSeenQpc: 100)),
+            Line(Spec(1, "B.", "green", firstSeenQpc: 100)),
+            Line(Spec(2, "C.", "blue", firstSeenQpc: 100)),
+            Line(Spec(3, "D.", "red", firstSeenQpc: 100)),
+            Line(Spec(4, "Missing OCR row.", "green", firstSeenQpc: 100)),
+            Line(Spec(5, "E.", "blue", firstSeenQpc: 100)),
+            Line(Spec(6, "F.", "red", firstSeenQpc: 100)),
+        ]);
+        var changedViewport = new[]
+        {
+            Line(Spec(0, "B.", "green", firstSeenQpc: 200)),
+            Line(Spec(1, "C.", "blue", firstSeenQpc: 200)),
+            Line(Spec(2, "D.", "red", firstSeenQpc: 200)),
+            Line(Spec(3, "E.", "blue", firstSeenQpc: 200)),
+            Line(Spec(4, "F.", "red", firstSeenQpc: 200)),
+            Line(Spec(5, "G.", "green", firstSeenQpc: 200)),
+        };
+
+        _ = matcher.Match(changedViewport);
+        var repeated = matcher.Match(changedViewport.Select(line => line with { FirstSeenQpc = 300 }).ToList());
+
+        Assert.Equal(FrameMatchDecision.Overlap, repeated.Decision);
+        Assert.Equal(changedViewport.Length, repeated.MatchedLineCount);
+        Assert.Empty(repeated.LinesToEmit);
+    }
+
     private static object[] Case(
         IReadOnlyList<LineSpec> history,
         IReadOnlyList<LineSpec> current,

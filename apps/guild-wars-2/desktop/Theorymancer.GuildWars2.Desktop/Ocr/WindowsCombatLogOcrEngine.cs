@@ -3,7 +3,6 @@ using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Security.Cryptography;
 using Theorymancer.GuildWars2.Desktop.Capture;
-using System.Text;
 
 namespace Theorymancer.GuildWars2.Desktop.Ocr;
 
@@ -51,43 +50,18 @@ public sealed class WindowsCombatLogOcrEngine : ICombatLogOcrEngine
         cancellationToken.ThrowIfCancellationRequested();
 
         var frameHash = FrameHasher.Fnv1a64(sourceFrame.BgraPixels);
-        var recognizedLines = new List<RecognizedCombatLogLine>();
-        var pendingText = new StringBuilder();
-        var pendingWords = new List<RecognizedWord>();
-        foreach (var line in result.Lines)
-        {
-            var text = line.Text.Trim();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                continue;
-            }
-
-            var mergedText = CombatLogTextNormalizer.AppendFragment(pendingText.ToString(), text);
-            pendingText.Clear();
-            pendingText.Append(mergedText);
-            pendingWords.AddRange(line.Words.Select(word => new RecognizedWord(
+        var visualRows = result.Lines.Select(line => new OcrVisualRow(
+            line.Text,
+            line.Words.Select(word => new RecognizedWord(
                 word.Text,
                 word.BoundingRect.X / CombatLogImagePreprocessor.ScaleFactor,
                 word.BoundingRect.Y / CombatLogImagePreprocessor.ScaleFactor,
                 word.BoundingRect.Width / CombatLogImagePreprocessor.ScaleFactor,
-                word.BoundingRect.Height / CombatLogImagePreprocessor.ScaleFactor)));
-
-            if (!CombatLogTextNormalizer.IsCompleteLine(pendingText.ToString()))
-            {
-                continue;
-            }
-
-            recognizedLines.Add(new RecognizedCombatLogLine(
-                sourceFrame.QpcTimestamp,
-                recognizedLines.Count,
-                frameHash,
-                CombatLogTextNormalizer.NormalizeCompletedLine(pendingText.ToString()),
-                CombatLogColorClassifier.Classify(sourceFrame, pendingWords),
-                pendingWords.ToList()));
-            pendingText.Clear();
-            pendingWords.Clear();
-        }
-
-        return recognizedLines;
+                word.BoundingRect.Height / CombatLogImagePreprocessor.ScaleFactor)).ToList())).ToList();
+        return CombatLogVisualRowAssembler.Assemble(
+            sourceFrame.QpcTimestamp,
+            frameHash,
+            visualRows,
+            words => CombatLogColorClassifier.Classify(sourceFrame, words));
     }
 }
