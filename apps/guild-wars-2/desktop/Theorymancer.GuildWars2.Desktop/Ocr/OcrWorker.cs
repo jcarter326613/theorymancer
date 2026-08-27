@@ -15,10 +15,11 @@ public sealed class OcrWorker : IAsyncDisposable
     private readonly ICombatLogOcrEngine _engine;
     private readonly Func<RecognizedCombatLogLine, Task> _onRecognized;
     private readonly Action<PreprocessedCombatLogFrame> _onPreprocessed;
+    private readonly Action<FrameMatchResult> _onFrameMatched;
     private readonly Action<string> _onStatus;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _workerTask;
-    private readonly Dictionary<int, string> _previousTextByLine = [];
+    private readonly CombatLogFrameMatcher _frameMatcher = new();
     private long _droppedRows;
     private long _recognizedRows;
     private long _emptyRows;
@@ -27,11 +28,13 @@ public sealed class OcrWorker : IAsyncDisposable
         ICombatLogOcrEngine engine,
         Func<RecognizedCombatLogLine, Task> onRecognized,
         Action<PreprocessedCombatLogFrame> onPreprocessed,
+        Action<FrameMatchResult> onFrameMatched,
         Action<string> onStatus)
     {
         _engine = engine;
         _onRecognized = onRecognized;
         _onPreprocessed = onPreprocessed;
+        _onFrameMatched = onFrameMatched;
         _onStatus = onStatus;
         _workerTask = Task.Run(ProcessQueueAsync);
     }
@@ -93,15 +96,10 @@ public sealed class OcrWorker : IAsyncDisposable
                     continue;
                 }
 
-                foreach (var line in lines)
+                var match = _frameMatcher.Match(lines);
+                _onFrameMatched(match);
+                foreach (var line in match.LinesToEmit)
                 {
-                    if (_previousTextByLine.TryGetValue(line.RowIndex, out var previousText) &&
-                        previousText == line.Text)
-                    {
-                        continue;
-                    }
-
-                    _previousTextByLine[line.RowIndex] = line.Text;
                     Interlocked.Increment(ref _recognizedRows);
                     await _onRecognized(line);
                 }

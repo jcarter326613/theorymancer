@@ -25,6 +25,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
     private long _lastOcrQpc;
     private CapturedFrame? _latestChangedFrame;
     private PreprocessedCombatLogFrame? _latestPreprocessedFrame;
+    private FrameMatchResult? _latestFrameMatch;
     private bool _disposed;
 
     private CaptureSession(
@@ -78,6 +79,13 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                     if (session is not null && session._diagnosticsEnabled)
                     {
                         session._latestPreprocessedFrame = preprocessed;
+                    }
+                },
+                match =>
+                {
+                    if (session is not null && session._diagnosticsEnabled)
+                    {
+                        session._latestFrameMatch = match;
                     }
                 },
                 message => session?.StatusChanged?.Invoke(message));
@@ -145,11 +153,13 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         if (!enabled)
         {
             _latestPreprocessedFrame = null;
+            _latestFrameMatch = null;
             DiagnosticsUpdated?.Invoke(new CaptureDiagnostics(
                 Statistics,
                 0,
                 0,
                 _rowHeightPixels,
+                null,
                 null,
                 null));
         }
@@ -212,7 +222,8 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
             frame.Height,
             _rowHeightPixels,
             CreatePreviewFrame(frame),
-            _latestPreprocessedFrame));
+            _latestPreprocessedFrame,
+            _latestFrameMatch));
     }
 
     private static CapturedFrame CreatePreviewFrame(CapturedFrame frame)

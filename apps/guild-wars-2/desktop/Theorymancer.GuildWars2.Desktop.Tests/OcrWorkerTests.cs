@@ -19,6 +19,7 @@ public sealed class OcrWorkerTests
                 return Task.CompletedTask;
             },
             _ => { },
+            _ => { },
             _ => { });
 
         Assert.True(worker.TryQueue(CreateFrame(0)));

@@ -6,7 +6,7 @@ namespace Theorymancer.GuildWars2.Desktop.Tests;
 public sealed class CombatLogImagePreprocessorTests
 {
     [Fact]
-    public void Process_UpscalesAndProducesBlackAndWhitePixels()
+    public void Process_UpscalesAndPreservesColorPixels()
     {
         var source = new CapturedFrame(
             QpcTimestamp: 123,
@@ -21,9 +21,7 @@ public sealed class CombatLogImagePreprocessorTests
         Assert.Equal(6, processed.Frame.Width);
         Assert.Equal(3, processed.Frame.Height);
         Assert.Equal(24, processed.Frame.Stride);
-        foreach (var pixel in processed.Frame.BgraPixels)
-        {
-            Assert.True(pixel is 0 or 255);
-        }
+        Assert.Equal([10, 10, 10, 255, 10, 10, 10, 255, 10, 10, 10, 255], processed.Frame.BgraPixels[..12]);
+        Assert.Equal([240, 240, 240, 255, 240, 240, 240, 255, 240, 240, 240, 255], processed.Frame.BgraPixels[12..24]);
     }
 }

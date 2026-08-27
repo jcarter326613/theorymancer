@@ -217,8 +217,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             DiagnosticsSummaryText.Text =
                 $"Frame: {diagnostics.CaptureWidth} x {diagnostics.CaptureHeight}\n" +
                 $"Row height: {diagnostics.RowHeightPixels}px\n" +
-                $"OCR input: {diagnostics.ProcessedPreviewFrame?.Frame.Width} x {diagnostics.ProcessedPreviewFrame?.Frame.Height}; " +
-                $"threshold {diagnostics.ProcessedPreviewFrame?.Threshold}\n" +
+                $"OCR input: {diagnostics.ProcessedPreviewFrame?.Frame.Width} x {diagnostics.ProcessedPreviewFrame?.Frame.Height}\n" +
+                $"Match: {diagnostics.LastFrameMatch?.Decision}; " +
+                $"overlap {diagnostics.LastFrameMatch?.MatchedLineCount}; " +
+                $"confidence {diagnostics.LastFrameMatch?.Confidence:P1}\n" +
                 FormatStatistics(diagnostics.Statistics);
             OriginalDiagnosticPreview.Source = diagnostics.OriginalPreviewFrame is { } frame
                 ? ToBitmapSource(frame)
@@ -251,8 +253,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ProcessedDiagnosticPreview.Source = ToBitmapSource(processedFrame.Frame);
             DiagnosticsSummaryText.Text =
                 $"Frame: {sourceFrame.Width} x {sourceFrame.Height}\n" +
-                $"OCR input: {processedFrame.Frame.Width} x {processedFrame.Frame.Height}; " +
-                $"threshold {processedFrame.Threshold}\n" +
+                $"OCR input: {processedFrame.Frame.Width} x {processedFrame.Frame.Height}\n" +
                 $"Diagnostic OCR found {lines.Count} line(s).";
             AddActivity($"Diagnostic OCR found {lines.Count} line(s).");
             foreach (var line in lines)

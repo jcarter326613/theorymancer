@@ -16,4 +16,5 @@ public sealed record CaptureDiagnostics(
     int CaptureHeight,
     int RowHeightPixels,
     CapturedFrame? OriginalPreviewFrame,
-    PreprocessedCombatLogFrame? ProcessedPreviewFrame);
+    PreprocessedCombatLogFrame? ProcessedPreviewFrame,
+    FrameMatchResult? LastFrameMatch);
