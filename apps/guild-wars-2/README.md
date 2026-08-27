@@ -28,6 +28,18 @@ dotnet publish apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorym
 The publish directory contains `TheorymancerScreenCollector.exe`, which can be
 started by double-clicking it.
 
+## OCR Row Model
+
+Capture and frame matching operate on the visual rows returned by Windows OCR.
+Every non-empty OCR row is emitted as captured, including rows without terminal
+punctuation. Capture must not merge rows based on punctuation, word position,
+or an assumed Guild Wars 2 message format. This keeps the UI faithful to the
+visible game log and prevents an uncertain OCR row from corrupting later rows.
+
+Semantic reconstruction of wrapped or multi-part messages is a later,
+Guild Wars 2-specific analysis step. It may use verified game-message formats,
+but must not control raw capture, matching, or UI activity output.
+
 Recognized combat-log text appears in the collector's live activity log and is
 written locally as JSONL under
 `%LOCALAPPDATA%\Theorymancer\guild-wars-2\screen-capture-sessions`. Enable

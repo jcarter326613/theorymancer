@@ -25,4 +25,13 @@ public sealed class CombatLogTextNormalizerTests
     {
         Assert.False(CombatLogTextNormalizer.IsCompleteLine("You dealt 1,234 damage"));
     }
+
+    [Theory]
+    [InlineData("Screenshot saved as Wars")]
+    [InlineData("You critically hit Standard Kitty Golem for 1,681 using")]
+    [InlineData("You critically hit Standard Kitty Golem for 1,681 using [Bleed].")]
+    public void IsCompleteLine_AcceptsEveryVisualOcrRowRegardlessOfTerminalPunctuation(string visualRow)
+    {
+        Assert.True(CombatLogTextNormalizer.IsCompleteLine(visualRow));
+    }
 }
