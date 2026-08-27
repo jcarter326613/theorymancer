@@ -19,4 +19,12 @@ public sealed class CombatLogTextNormalizerTests
 
         Assert.Equal("You dealt 1,234 damage.", text);
     }
+
+    [Fact]
+    public void NormalizeVisualRow_PreservesOcrPunctuation()
+    {
+        var text = CombatLogTextNormalizer.NormalizeVisualRow("You dealt 1 $390 damage.");
+
+        Assert.Equal("You dealt 1 $390 damage.", text);
+    }
 }

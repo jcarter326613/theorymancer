@@ -276,6 +276,28 @@ public sealed class CombatLogFrameMatcherTests
         Assert.Empty(repeated.LinesToEmit);
     }
 
+    [Theory]
+    [InlineData("1 ,390")]
+    [InlineData("1 .390")]
+    [InlineData("1 $390")]
+    public void Match_TreatsPunctuationSeparatedNumericGroupsAsEquivalent(string ocrNumber)
+    {
+        var matcher = new CombatLogFrameMatcher();
+        _ = matcher.Match(
+        [
+            Line(Spec(0, "You hit Standard Kitty Golem for 1,390 using [Bleeding].", "unknown")),
+        ]);
+
+        var result = matcher.Match(
+        [
+            Line(Spec(0, $"You hit Standard Kitty Golem for {ocrNumber} using [Bleeding].", "unknown")),
+        ]);
+
+        Assert.Equal(FrameMatchDecision.Overlap, result.Decision);
+        Assert.Equal(1, result.MatchedLineCount);
+        Assert.Empty(result.LinesToEmit);
+    }
+
     private static object[] Case(
         IReadOnlyList<LineSpec> history,
         IReadOnlyList<LineSpec> current,

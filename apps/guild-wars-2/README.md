@@ -37,6 +37,9 @@ The resulting row receives one color classification based on its aggregated
 words. Capture must not merge rows based on punctuation, message text, color,
 or an assumed Guild Wars 2 message format. This keeps the UI faithful to the
 visible game log and prevents an uncertain OCR row from corrupting later rows.
+Frame matching may compare digit groups separated by OCR punctuation as the
+same number, but this matcher-only normalization never changes displayed or
+stored captured text.
 
 Semantic reconstruction of wrapped or multi-part messages is a later,
 Guild Wars 2-specific analysis step. It may use verified game-message formats,

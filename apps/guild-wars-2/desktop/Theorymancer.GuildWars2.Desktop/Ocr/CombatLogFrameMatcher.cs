@@ -322,8 +322,8 @@ public sealed partial class CombatLogFrameMatcher
             }
         }
 
-        var leftNumbers = NumberTokens().Matches(normalizedLeft).Select(match => match.Value).ToList();
-        var rightNumbers = NumberTokens().Matches(normalizedRight).Select(match => match.Value).ToList();
+        var leftNumbers = NumberTokens().Matches(normalizedLeft).Select(CanonicalNumber).ToList();
+        var rightNumbers = NumberTokens().Matches(normalizedRight).Select(CanonicalNumber).ToList();
         if (leftNumbers.Count > 0 && rightNumbers.Count > 0)
         {
             similarity += leftNumbers.SequenceEqual(rightNumbers)
@@ -356,6 +356,8 @@ public sealed partial class CombatLogFrameMatcher
 
     private static string Normalize(string text) => Whitespace().Replace(text.Trim().ToLowerInvariant(), " ");
 
+    private static string CanonicalNumber(Match match) => NonDigits().Replace(match.Value, string.Empty);
+
     private static int LevenshteinDistance(string left, string right)
     {
         var previous = new int[right.Length + 1];
@@ -382,8 +384,11 @@ public sealed partial class CombatLogFrameMatcher
         return previous[right.Length];
     }
 
-    [GeneratedRegex(@"\d+(?:,\d+)*")]
+    [GeneratedRegex(@"\d+(?:\s*[^\p{L}\p{N}\s]+\s*\d+)*")]
     private static partial Regex NumberTokens();
+
+    [GeneratedRegex(@"\D+")]
+    private static partial Regex NonDigits();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
