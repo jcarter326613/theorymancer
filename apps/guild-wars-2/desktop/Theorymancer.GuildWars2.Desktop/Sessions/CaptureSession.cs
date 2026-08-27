@@ -15,6 +15,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
     private readonly SessionWriter _writer;
     private readonly OcrWorker _ocrWorker;
     private readonly OcrFrameDebugWriter _debugFrameWriter;
+    private readonly ActivityLogDebugWriter _debugActivityWriter;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
     private volatile bool _diagnosticsEnabled;
@@ -30,12 +31,14 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         SessionWriter writer,
         OcrWorker ocrWorker,
         OcrFrameDebugWriter debugFrameWriter,
+        ActivityLogDebugWriter debugActivityWriter,
         bool diagnosticsEnabled)
     {
         _capture = capture;
         _writer = writer;
         _ocrWorker = ocrWorker;
         _debugFrameWriter = debugFrameWriter;
+        _debugActivityWriter = debugActivityWriter;
         _diagnosticsEnabled = diagnosticsEnabled;
         _captureTask = Task.Run(CaptureLoopAsync);
     }
@@ -61,6 +64,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         {
             var capture = new VisibleScreenRegionCapture(gameWindow, settings.CombatLogCrop);
             var debugFrameWriter = new OcrFrameDebugWriter(Directory.GetCurrentDirectory(), DateTimeOffset.Now);
+            var debugActivityWriter = new ActivityLogDebugWriter(debugFrameWriter.SessionDirectory);
             if (diagnosticsEnabled)
             {
                 debugFrameWriter.EnsureSessionDirectory();
@@ -89,12 +93,14 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                     }
                 },
                 message => session?.StatusChanged?.Invoke(message),
-                lines => session?.WriteDebugOcrFrameAsync(lines) ?? Task.CompletedTask);
+                lines => session?.WriteDebugOcrFrameAsync(lines) ?? Task.FromResult<long?>(null),
+                (rawFrameSequence, lines, match) => session?.WriteDebugOcrFrameMatch(rawFrameSequence, lines, match));
             session = new CaptureSession(
                 capture,
                 writer,
                 ocrWorker,
                 debugFrameWriter,
+                debugActivityWriter,
                 diagnosticsEnabled);
             await writer.WriteAsync("capture_started", new
             {
@@ -147,6 +153,8 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         _ocrWorker.RecognizedRows,
         _ocrWorker.EmptyRows,
         _ocrWorker.DroppedRows);
+
+    public ActivityLogDebugWriter DebugActivityWriter => _debugActivityWriter;
 
     public void SetDiagnosticsEnabled(bool enabled)
     {
@@ -231,6 +239,17 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         }
     }
 
-    private Task WriteDebugOcrFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines) =>
-        _diagnosticsEnabled ? _debugFrameWriter.WriteFrameAsync(lines) : Task.CompletedTask;
+    private async Task<long?> WriteDebugOcrFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines) =>
+        _diagnosticsEnabled ? await _debugFrameWriter.WriteFrameAsync(lines) : null;
+
+    private void WriteDebugOcrFrameMatch(
+        long? rawFrameSequence,
+        IReadOnlyList<RecognizedCombatLogLine> lines,
+        FrameMatchResult? match)
+    {
+        if (_diagnosticsEnabled)
+        {
+            _debugActivityWriter.WriteFrameMatch(rawFrameSequence, lines, match);
+        }
+    }
 }

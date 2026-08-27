@@ -23,7 +23,9 @@ public sealed class OcrFrameDebugWriter : IDisposable
 
     public void EnsureSessionDirectory() => Directory.CreateDirectory(_sessionDirectory);
 
-    public async Task WriteFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines)
+    public string SessionDirectory => _sessionDirectory;
+
+    public async Task<long> WriteFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines)
     {
         await _writeLock.WaitAsync();
         try
@@ -34,6 +36,7 @@ public sealed class OcrFrameDebugWriter : IDisposable
             var frameSequence = ++_frameSequence;
             var path = Path.Combine(_sessionDirectory, $"{frameSequence}.jsonl");
             await File.WriteAllTextAsync(path, Format(lines), Encoding.UTF8);
+            return frameSequence;
         }
         finally
         {

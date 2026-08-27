@@ -202,6 +202,19 @@ public sealed class CombatLogFrameMatcherTests
             expectedLines: [Spec(0, "New event.", "red"), Spec(1, "A.", "green"), Spec(2, "B.", "blue")]);
     }
 
+    [Fact]
+    public void Match_DoesNotEmitPersistedFrameWhenOnlyTimestampAndPixelHashChange()
+    {
+        var matcher = new CombatLogFrameMatcher();
+        _ = matcher.Match(PersistedFrame(182686418828, 0x3EAD2BE9BFBDA57D));
+
+        var result = matcher.Match(PersistedFrame(182688900545, 0x24BE4E3DA637F385));
+
+        Assert.Equal(FrameMatchDecision.Overlap, result.Decision);
+        Assert.Equal(27, result.MatchedLineCount);
+        Assert.Empty(result.LinesToEmit);
+    }
+
     private static object[] Case(
         IReadOnlyList<LineSpec> history,
         IReadOnlyList<LineSpec> current,
@@ -210,10 +223,47 @@ public sealed class CombatLogFrameMatcherTests
         IReadOnlyList<LineSpec> expectedLines) =>
         [new FrameMatchCase(history, current, decision, matchedLineCount, expectedLines)];
 
-    private static LineSpec Spec(int rowIndex, string text, string colorClass) => new(rowIndex, text, colorClass);
+    private static IReadOnlyList<RecognizedCombatLogLine> PersistedFrame(long firstSeenQpc, ulong pixelHash) =>
+    [
+        Line(Spec(0, "You hit Standard Kitty Golem for 954 using [Dusk Strike].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(1, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(2, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(3, "You hit Standard Kitty Golem for 938 using [Dusk Strike].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(4, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(5, "You hit Standard Kitty Golem for 2,932 using [Gravedigger].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(6, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(7, "You hit Standard Kitty Golem for 906 using [Nightfall].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(8, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(9, "You hit Standard Kitty Golem for 906 using [Nightfall].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(10, "You hit Standard Kitty Golem for 1,160 using [Grasping Darkness].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(11, "You hit Standard Kitty Golem for 1,096 using [Nightfall].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(12, "You hit Standard Kitty Golem for 319 using [Bleeding].", "unknown", firstSeenQpc, pixelHash)),
+        Line(Spec(13, "You hit Standard Kitty Golem for 1,096 using [Nightfall].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(14, "You hit Standard Kitty Golem for 326 using [Bleeding].", "unknown", firstSeenQpc, pixelHash)),
+        Line(Spec(15, "You hit Standard Kitty Golem for 326 using [Bleeding].", "unknown", firstSeenQpc, pixelHash)),
+        Line(Spec(16, "You hit Standard Kitty Golem for 326 using [Bleeding].", "unknown", firstSeenQpc, pixelHash)),
+        Line(Spec(17, "You hit Standard Kitty Golem for 208 using [Bleeding].", "unknown", firstSeenQpc, pixelHash)),
+        Line(Spec(18, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(19, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(20, "You hit Standard Kitty Golem for 938 using [Dusk Strike].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(21, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(22, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(23, "You hit Standard Kitty Golem for 2,721 using [Gravedigger].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(24, "You hit Standard Kitty Golem for 170 using Signet of Vampirism.", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(25, "You critically hit Standard Kitty Golem for 1,681 using [Dusk Strike].", "red", firstSeenQpc, pixelHash)),
+        Line(Spec(26, "You hit Standard Kitty Golem for 417 using Flame Blast.", "red", firstSeenQpc, pixelHash)),
+    ];
+
+    private static LineSpec Spec(
+        int rowIndex,
+        string text,
+        string colorClass,
+        long firstSeenQpc = 0,
+        ulong pixelHash = 0) =>
+        new(rowIndex, text, colorClass, firstSeenQpc, pixelHash);
 
     private static RecognizedCombatLogLine Line(LineSpec line) =>
-        new(0, line.RowIndex, 0, line.Text, line.ColorClass, []);
+        new(line.FirstSeenQpc, line.RowIndex, line.PixelHash, line.Text, line.ColorClass, []);
 
     private static (int RowIndex, string Text, string ColorClass) Signature(LineSpec line) =>
         (line.RowIndex, line.Text, line.ColorClass);
@@ -228,5 +278,10 @@ public sealed class CombatLogFrameMatcherTests
         int ExpectedMatchedLineCount,
         IReadOnlyList<LineSpec> ExpectedLines);
 
-    public sealed record LineSpec(int RowIndex, string Text, string ColorClass);
+    public sealed record LineSpec(
+        int RowIndex,
+        string Text,
+        string ColorClass,
+        long FirstSeenQpc = 0,
+        ulong PixelHash = 0);
 }

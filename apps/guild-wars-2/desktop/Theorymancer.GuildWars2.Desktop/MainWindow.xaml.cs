@@ -18,6 +18,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private SelectedGameWindow? _selectedWindow;
     private CalibrationOverlay? _calibrationOverlay;
     private CaptureSession? _captureSession;
+    private ActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate its combat-log crop.";
     private string _captureStatus = "Not recording";
@@ -123,10 +124,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _captureSession.StatusChanged += CaptureSession_StatusChanged;
             _captureSession.LineRecognized += CaptureSession_LineRecognized;
             _captureSession.DiagnosticsUpdated += CaptureSession_DiagnosticsUpdated;
+            if (_diagnosticsEnabled)
+            {
+                _activityLogDebugWriter = _captureSession.DebugActivityWriter;
+            }
+
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
             CaptureStatus = "Recording";
-            AddActivity("Recording started. Press Stop capture before moving or minimizing Guild Wars 2.");
+            AddActivity(
+                "Recording started. Press Stop capture before moving or minimizing Guild Wars 2.",
+                "capture_started");
         }
         catch (Exception exception)
         {
@@ -175,7 +183,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         StartButton.IsEnabled = true;
         StopButton.IsEnabled = false;
         CaptureStatus = "Not recording";
-        AddActivity($"Recording stopped. {FormatStatistics(captureSession.Statistics)}");
+        AddActivity(
+            $"Recording stopped. {FormatStatistics(captureSession.Statistics)}",
+            "capture_stopped",
+            captureSession.Statistics);
+        if (_activityLogDebugWriter is { } activityLogDebugWriter)
+        {
+            await activityLogDebugWriter.DisposeAsync();
+            _activityLogDebugWriter = null;
+        }
     }
 
     private void CaptureSession_StatusChanged(string message)
@@ -183,13 +199,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Dispatcher.BeginInvoke(() =>
         {
             CaptureStatus = message;
-            AddActivity(message);
+            AddActivity(message, "capture_status");
         });
     }
 
     private void CaptureSession_LineRecognized(RecognizedCombatLogLine line)
     {
-        Dispatcher.BeginInvoke(() => AddActivity(line.Text));
+        Dispatcher.BeginInvoke(() => AddActivity(line.Text, "matched_line", line));
     }
 
     private void CaptureSession_DiagnosticsUpdated(CaptureDiagnostics diagnostics)
@@ -228,7 +244,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RunDiagnosticOcrButton.IsEnabled = false;
         try
         {
-            AddActivity("Running diagnostic OCR on the current combat-log crop.");
+            AddActivity("Running diagnostic OCR on the current combat-log crop.", "diagnostic_ocr_started");
             var capture = new VisibleScreenRegionCapture(_selectedWindow, _settings.CombatLogCrop);
             var sourceFrame = await capture.CaptureAsync(CancellationToken.None);
             var processedFrame = CombatLogImagePreprocessor.Process(sourceFrame);
@@ -241,10 +257,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Frame: {sourceFrame.Width} x {sourceFrame.Height}\n" +
                 $"OCR input: {processedFrame.Frame.Width} x {processedFrame.Frame.Height}\n" +
                 $"Diagnostic OCR found {lines.Count} line(s).";
-            AddActivity($"Diagnostic OCR found {lines.Count} line(s).");
+            AddActivity($"Diagnostic OCR found {lines.Count} line(s).", "diagnostic_ocr_completed");
             foreach (var line in lines)
             {
-                AddActivity(line.Text);
+                AddActivity(line.Text, "diagnostic_ocr_line", line);
             }
         }
         catch (Exception exception)
@@ -262,6 +278,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _diagnosticsEnabled = DiagnosticsCheckBox.IsChecked == true;
         DiagnosticsPanel.Visibility = _diagnosticsEnabled ? Visibility.Visible : Visibility.Collapsed;
         _captureSession?.SetDiagnosticsEnabled(_diagnosticsEnabled);
+        if (_diagnosticsEnabled && _captureSession is not null)
+        {
+            _activityLogDebugWriter = _captureSession.DebugActivityWriter;
+        }
+
         if (!_diagnosticsEnabled)
         {
             DiagnosticsSummaryText.Text = string.Empty;
@@ -269,7 +290,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ProcessedDiagnosticPreview.Source = null;
         }
 
-        AddActivity(_diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.");
+        AddActivity(
+            _diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.",
+            _diagnosticsEnabled ? "diagnostics_enabled" : "diagnostics_disabled");
     }
 
     private void ShowSetupError(string message)
@@ -278,9 +301,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         MessageBox.Show(this, message, "Theorymancer collector", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void AddActivity(string message)
+    private void AddActivity(string message, string source = "application", object? details = null)
     {
-        ActivityLog.Add($"{DateTimeOffset.Now:HH:mm:ss}  {message}");
+        var displayedAt = DateTimeOffset.Now;
+        var displayedText = $"{displayedAt:HH:mm:ss}  {message}";
+        ActivityLog.Add(displayedText);
+        _activityLogDebugWriter?.WriteActivity(displayedAt, displayedText, source, details);
         while (ActivityLog.Count > 500)
         {
             ActivityLog.RemoveAt(0);

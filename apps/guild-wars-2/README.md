@@ -35,6 +35,8 @@ written locally as JSONL under
 an in-memory preview of the calibrated crop. While diagnostics is enabled, the
 collector also writes one JSON Lines raw-OCR file per processed frame under
 `debug-ocr-frames/<capture-start-timestamp>/` relative to its working directory.
+That directory also contains `activity_log.jsonl`, which records visible activity
+entries and the correlated matcher result for each processed OCR frame.
 Diagnostic previews are not saved.
 
 Game analysis workloads remain independent of the public website and API and

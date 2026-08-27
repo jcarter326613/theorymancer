@@ -17,7 +17,8 @@ public sealed class OcrWorker : IAsyncDisposable
     private readonly Action<PreprocessedCombatLogFrame> _onPreprocessed;
     private readonly Action<FrameMatchResult> _onFrameMatched;
     private readonly Action<string> _onStatus;
-    private readonly Func<IReadOnlyList<RecognizedCombatLogLine>, Task> _onOcrCompleted;
+    private readonly Func<IReadOnlyList<RecognizedCombatLogLine>, Task<long?>> _onOcrCompleted;
+    private readonly Action<long?, IReadOnlyList<RecognizedCombatLogLine>, FrameMatchResult?> _onOcrFrameProcessed;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _workerTask;
     private readonly CombatLogFrameMatcher _frameMatcher = new();
@@ -31,14 +32,16 @@ public sealed class OcrWorker : IAsyncDisposable
         Action<PreprocessedCombatLogFrame> onPreprocessed,
         Action<FrameMatchResult> onFrameMatched,
         Action<string> onStatus,
-        Func<IReadOnlyList<RecognizedCombatLogLine>, Task>? onOcrCompleted = null)
+        Func<IReadOnlyList<RecognizedCombatLogLine>, Task<long?>>? onOcrCompleted = null,
+        Action<long?, IReadOnlyList<RecognizedCombatLogLine>, FrameMatchResult?>? onOcrFrameProcessed = null)
     {
         _engine = engine;
         _onRecognized = onRecognized;
         _onPreprocessed = onPreprocessed;
         _onFrameMatched = onFrameMatched;
         _onStatus = onStatus;
-        _onOcrCompleted = onOcrCompleted ?? (_ => Task.CompletedTask);
+        _onOcrCompleted = onOcrCompleted ?? (_ => Task.FromResult<long?>(null));
+        _onOcrFrameProcessed = onOcrFrameProcessed ?? ((_, _, _) => { });
         _workerTask = Task.Run(ProcessQueueAsync);
     }
 
@@ -93,15 +96,17 @@ public sealed class OcrWorker : IAsyncDisposable
                     frame,
                     preprocessed.Frame,
                     _cancellationTokenSource.Token);
-                await _onOcrCompleted(lines);
+                var rawFrameSequence = await _onOcrCompleted(lines);
                 if (lines.Count == 0)
                 {
                     Interlocked.Increment(ref _emptyRows);
+                    _onOcrFrameProcessed(rawFrameSequence, lines, null);
                     continue;
                 }
 
                 var match = _frameMatcher.Match(lines);
                 _onFrameMatched(match);
+                _onOcrFrameProcessed(rawFrameSequence, lines, match);
                 foreach (var line in match.LinesToEmit)
                 {
                     Interlocked.Increment(ref _recognizedRows);
