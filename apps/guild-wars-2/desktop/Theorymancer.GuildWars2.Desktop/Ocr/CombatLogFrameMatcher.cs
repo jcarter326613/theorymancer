@@ -60,14 +60,20 @@ public sealed partial class CombatLogFrameMatcher
         }
 
         var bestLineSimilarity = 0.0;
-        var candidates = new List<Candidate>();
+        var similarities = new Dictionary<(int HistoryIndex, int CurrentIndex), double>();
         var candidateRowOffsets = new Dictionary<int, int>();
         var candidateLineCount = 0;
         for (var historyIndex = _history.Count - 1; historyIndex >= 0; historyIndex--)
         {
-            for (var currentIndex = current.Count - 1; currentIndex >= 0; currentIndex--)
+            for (var currentIndex = 0; currentIndex < current.Count; currentIndex++)
             {
+                if (current[currentIndex].RowIndex > _history[historyIndex].RowIndex)
+                {
+                    break;
+                }
+
                 var similarity = LineSimilarity(_history[historyIndex], current[currentIndex]);
+                similarities[(historyIndex, currentIndex)] = similarity;
                 bestLineSimilarity = Math.Max(bestLineSimilarity, similarity);
                 if (similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
                 {
@@ -77,17 +83,26 @@ public sealed partial class CombatLogFrameMatcher
                 var rowOffset = current[currentIndex].RowIndex - _history[historyIndex].RowIndex;
                 candidateRowOffsets[rowOffset] = candidateRowOffsets.GetValueOrDefault(rowOffset) + 1;
                 candidateLineCount++;
-                candidates.Add(ExpandCandidate(current, historyIndex, currentIndex, similarity));
             }
         }
 
         Candidate? bestCandidate = null;
-        foreach (var candidate in candidates)
+        for (var historyIndex = _history.Count - 1; historyIndex >= 0; historyIndex--)
         {
-            var scoredCandidate = ScoreCandidate(candidate, current, candidateRowOffsets, candidateLineCount);
-            if (bestCandidate is null || scoredCandidate.IsBetterThan(bestCandidate))
+            for (var currentIndex = current.Count - 1; currentIndex >= 0; currentIndex--)
             {
-                bestCandidate = scoredCandidate;
+                if (!similarities.TryGetValue((historyIndex, currentIndex), out var similarity) ||
+                    similarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+                {
+                    continue;
+                }
+
+                var candidate = ExpandCandidate(current, historyIndex, currentIndex, similarity, similarities);
+                var scoredCandidate = ScoreCandidate(candidate, current, candidateRowOffsets, candidateLineCount);
+                if (bestCandidate is null || scoredCandidate.IsBetterThan(bestCandidate))
+                {
+                    bestCandidate = scoredCandidate;
+                }
             }
         }
 
@@ -98,7 +113,8 @@ public sealed partial class CombatLogFrameMatcher
             while (nextCurrentIndex < current.Count && nextHistoryIndex < _history.Count &&
                     AreAdjacent(_history[nextHistoryIndex - 1], _history[nextHistoryIndex]) &&
                     AreAdjacent(current[nextCurrentIndex - 1], current[nextCurrentIndex]) &&
-                    LineSimilarity(_history[nextHistoryIndex], current[nextCurrentIndex]) >= Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+                    similarities.TryGetValue((nextHistoryIndex, nextCurrentIndex), out var similarity) &&
+                    similarity >= Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
                 nextCurrentIndex++;
                 nextHistoryIndex++;
@@ -118,7 +134,12 @@ public sealed partial class CombatLogFrameMatcher
         return new FrameMatchResult(FrameMatchDecision.NoOverlap, current, 0, 1 - bestLineSimilarity, bestLineSimilarity);
     }
 
-    private Candidate ExpandCandidate(IReadOnlyList<RecognizedCombatLogLine> current, int historyIndex, int currentIndex, double similarity)
+    private Candidate ExpandCandidate(
+        IReadOnlyList<RecognizedCombatLogLine> current,
+        int historyIndex,
+        int currentIndex,
+        double similarity,
+        IReadOnlyDictionary<(int HistoryIndex, int CurrentIndex), double> similarities)
     {
         var historyStart = historyIndex;
         var currentStart = currentIndex;
@@ -135,8 +156,8 @@ public sealed partial class CombatLogFrameMatcher
                 break;
             }
 
-            var previousSimilarity = LineSimilarity(_history[historyStart - 1], current[currentStart - 1]);
-            if (previousSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+            if (!similarities.TryGetValue((historyStart - 1, currentStart - 1), out var previousSimilarity) ||
+                previousSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
                 break;
             }
@@ -155,8 +176,8 @@ public sealed partial class CombatLogFrameMatcher
                 break;
             }
 
-            var nextSimilarity = LineSimilarity(_history[historyEnd + 1], current[currentEnd + 1]);
-            if (nextSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
+            if (!similarities.TryGetValue((historyEnd + 1, currentEnd + 1), out var nextSimilarity) ||
+                nextSimilarity < Weight(FrameMatchFeature.CandidateMinimumLineEvidence))
             {
                 break;
             }
