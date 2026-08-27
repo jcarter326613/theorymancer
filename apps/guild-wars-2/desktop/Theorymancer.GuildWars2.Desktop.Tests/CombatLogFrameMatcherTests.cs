@@ -50,7 +50,7 @@ public sealed class CombatLogFrameMatcherTests
             current: [Spec(0, "You hit the monster for 123 using Storm Strike.", "unknown")],
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 1,
-            expectedLines: [Spec(0, "You hit the monster for 123 using Storm Strike.", "unknown")]);
+            expectedLines: []);
 
         yield return Case(
             history: [Spec(0, "You entered the dungeon.", "unknown"), Spec(1, "The gate opens.", "unknown")],
@@ -62,7 +62,7 @@ public sealed class CombatLogFrameMatcherTests
         yield return Case(
             history: [Spec(0, "You dealt 1,234 damage.", "red")],
             current: [Spec(0, "You dealt 9,999 damage.", "red")],
-            decision: FrameMatchDecision.Ambiguous,
+            decision: FrameMatchDecision.NoOverlap,
             matchedLineCount: 0,
             expectedLines: [Spec(0, "You dealt 9,999 damage.", "red")]);
 
@@ -74,15 +74,15 @@ public sealed class CombatLogFrameMatcherTests
         yield return Case(
             history: [Spec(0, "G.", "green"), Spec(2, "H.", "blue")],
             current: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")],
-            decision: FrameMatchDecision.Overlap,
-            matchedLineCount: 1,
+            decision: FrameMatchDecision.NoOverlap,
+            matchedLineCount: 0,
             expectedLines: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")]);
             
         yield return Case(
             history: [Spec(0, "G.", "green"), Spec(1, "H.", "blue")],
             current: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")],
             decision: FrameMatchDecision.Overlap,
-            matchedLineCount: 1,
+            matchedLineCount: 2,
             expectedLines: [Spec(6, "R.", "red")]);
             
         yield return Case(
@@ -107,11 +107,92 @@ public sealed class CombatLogFrameMatcherTests
                 Spec(7, "You hit the monster for 30000 damage.", "red"),
             ],
             decision: FrameMatchDecision.Overlap,
-            matchedLineCount: 1,
+            matchedLineCount: 6,
             expectedLines: [
                 Spec(6, "You hit the monster for 112 damage.", "blue"),
                 Spec(7, "You hit the monster for 30000 damage.", "red"),
             ]);
+            
+        yield return Case(
+            history: [
+                Spec(0, "You hit the monster for 11122 damage.", "green"),
+                Spec(1, "You hit the monster for 11122 damage.", "green"),
+                Spec(2, "You hit the monater for 1122 damage.", "green"),
+                Spec(3, "You hit the monster for 2511 damage.", "green"),
+                Spec(4, "You hit the monster for 11122 damage.", "green"),
+                Spec(5, "You hit the monster for 11122 damage.", "green"),
+                Spec(6, "You hit the monster for 5132 damage.", "green"),
+                Spec(7, "You hit the monster for 11122 damage.", "green")
+            ],
+            current: [
+                Spec(0, "You hit the monster for 1122 damage.", "green"),
+                Spec(1, "You hit the monster for 2512 damage.", "green"),
+                Spec(2, "You hit the monster for 11122 damage.", "green"),
+                Spec(3, "You hit the monster for 11122 damage.", "green"),
+                Spec(4, "You hit the monster for 5132 damage.", "green"),
+                Spec(5, "You hit the monste for 11122 damage.", "green"),
+                Spec(6, "You hit the monster for 112 damage.", "green"),
+                Spec(7, "You hit the monster for 30000 damage.", "green"),
+            ],
+            decision: FrameMatchDecision.Overlap,
+            matchedLineCount: 6,
+            expectedLines: [
+                Spec(6, "You hit the monster for 112 damage.", "green"),
+                Spec(7, "You hit the monster for 30000 damage.", "green"),
+            ]);
+            
+        yield return Case(
+            history: [
+                Spec(0, "You hit the monster for 1 damage.", "green"),
+                Spec(1, "You hit the monster for 2 damage.", "green"),
+                Spec(2, "You hit the monster for 3 damage.", "green"),
+                Spec(3, "You hit the monster for 1 damage.", "green"),
+                Spec(4, "You hit the monster for 2 damage.", "green"),
+                Spec(5, "You hit the monster for 3 damage.", "green"),
+            ],
+            current: [
+                Spec(0, "You hit the monster for 1 damage.", "green"),
+                Spec(1, "You hit the monster for 2 damage.", "green"),
+                Spec(2, "You hit the monster for 3 damage.", "green"),
+                Spec(3, "You hit the monster for 1 damage.", "green"),
+                Spec(4, "You hit the monster for 2 damage.", "green"),
+                Spec(5, "You hit the monster for 3 damage.", "green"),
+            ],
+            decision: FrameMatchDecision.Overlap,
+            matchedLineCount: 6,
+            expectedLines: []);
+            
+        yield return Case(
+            history: [
+                Spec(0, "You hit the monster for 1 damage.", "green"),
+                Spec(1, "You hit the monster for 2 damage.", "green"),
+                Spec(2, "You hit the monster for 3 damage.", "green"),
+                Spec(4, "You hit the monster for 1 damage.", "green"),
+                Spec(5, "You hit the monster for 2 damage.", "green"),
+                Spec(6, "You hit the monster for 3 damage.", "green"),
+            ],
+            current: [
+                Spec(0, "You hit the monster for 1 damage.", "green"),
+                Spec(1, "You hit the monster for 2 damage.", "green"),
+                Spec(2, "You hit the monster for 3 damage.", "green"),
+                Spec(3, "You hit the monster for 1 damage.", "green"),
+                Spec(4, "You hit the monster for 2 damage.", "green"),
+                Spec(5, "You hit the monster for 3 damage.", "green"),
+            ],
+            decision: FrameMatchDecision.Overlap,
+            matchedLineCount: 3,
+            expectedLines: [
+                Spec(3, "You hit the monster for 1 damage.", "green"),
+                Spec(4, "You hit the monster for 2 damage.", "green"),
+                Spec(5, "You hit the monster for 3 damage.", "green"),
+            ]);
+
+        yield return Case(
+            history: [Spec(0, "Great.", "green"), Spec(1, "Hello.", "blue")],
+            current: [Spec(4, "Gr3at.", "green"), Spec(5, "Hello.", "blue"), Spec(6, "Ready.", "red")],
+            decision: FrameMatchDecision.Overlap,
+            matchedLineCount: 2,
+            expectedLines: [Spec(6, "Ready.", "red")]);
     }
 
     private static object[] Case(
