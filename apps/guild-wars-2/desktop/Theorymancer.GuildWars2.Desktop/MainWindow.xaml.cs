@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
@@ -28,7 +27,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
         _settings = _settingsStore.Load();
-        RowHeightTextBox.Text = _settings.RowHeightPixels.ToString(CultureInfo.InvariantCulture);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -73,11 +71,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (!TryGetRowHeight(out var rowHeight))
-        {
-            return;
-        }
-
         if (!_selectedWindow.TryGetClientBounds(out var clientBounds))
         {
             ShowSetupError("Guild Wars 2 is no longer available. Select its window again.");
@@ -89,7 +82,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         overlay.RegionCountChanged += UpdateCalibrationControls;
         overlay.Confirmed += regions =>
         {
-            _settings = _settings with { Regions = regions, RowHeightPixels = rowHeight };
+            _settings = _settings with { Regions = regions };
             _settingsStore.Save(_settings);
             SetupStatus = "Calibration saved. Start capture when the dedicated combat tab is visible.";
             EndCalibration();
@@ -116,18 +109,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (!TryGetRowHeight(out var rowHeight))
-        {
-            return;
-        }
-
         if (!_selectedWindow.TryGetClientBounds(out _))
         {
             ShowSetupError("Guild Wars 2 is no longer available. Select its window again.");
             return;
         }
 
-        _settings = _settings with { RowHeightPixels = rowHeight };
         _settingsStore.Save(_settings);
 
         try
@@ -216,7 +203,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             DiagnosticsSummaryText.Text =
                 $"Frame: {diagnostics.CaptureWidth} x {diagnostics.CaptureHeight}\n" +
-                $"Row height: {diagnostics.RowHeightPixels}px\n" +
                 $"OCR input: {diagnostics.ProcessedPreviewFrame?.Frame.Width} x {diagnostics.ProcessedPreviewFrame?.Frame.Height}\n" +
                 $"Match: {diagnostics.LastFrameMatch?.Decision}; " +
                 $"overlap {diagnostics.LastFrameMatch?.MatchedLineCount}; " +
@@ -286,18 +272,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AddActivity(_diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.");
     }
 
-    private bool TryGetRowHeight(out int rowHeight)
-    {
-        if (int.TryParse(RowHeightTextBox.Text, CultureInfo.InvariantCulture, out rowHeight) &&
-            rowHeight is >= 10 and <= 80)
-        {
-            return true;
-        }
-
-        ShowSetupError("Row height must be a whole number from 10 to 80 pixels.");
-        return false;
-    }
-
     private void ShowSetupError(string message)
     {
         CaptureStatus = message;
@@ -316,7 +290,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private static string FormatStatistics(CaptureStatistics statistics) =>
-        $"Frames {statistics.FramesCaptured}; changed rows {statistics.ChangedRows}; " +
+        $"Frames {statistics.FramesCaptured}; OCR queued {statistics.OcrFramesQueued}; " +
         $"recognized {statistics.RecognizedLines}; OCR empty {statistics.EmptyOcrRows}; " +
         $"dropped {statistics.DroppedOcrRows}.";
 

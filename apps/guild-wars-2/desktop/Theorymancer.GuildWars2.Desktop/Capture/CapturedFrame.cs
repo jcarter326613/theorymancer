@@ -7,14 +7,6 @@ public sealed record CapturedFrame(
     int Stride,
     byte[] BgraPixels);
 
-public sealed record ChangedRow(
-    long FirstSeenQpc,
-    int RowIndex,
-    ulong PixelHash,
-    int Width,
-    int Height,
-    byte[] BgraPixels);
-
 public interface IScreenRegionCapture
 {
     ValueTask<CapturedFrame> CaptureAsync(CancellationToken cancellationToken);

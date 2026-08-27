@@ -34,14 +34,13 @@ public sealed class CalibrationTests
             [
                 new CalibratedRegion("interface-map", "Map", new NormalizedCrop(0, 0, 0.2, 0.2)),
                 new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", combatLogCrop),
-            ],
-            RowHeightPixels: 20);
+            ]);
 
         Assert.Equal(combatLogCrop, settings.CombatLogCrop);
     }
 
     [Fact]
-    public void CollectorSettingsStore_MigratesTheLegacyCrop()
+    public void CollectorSettingsStore_MigratesTheLegacyCropAndIgnoresObsoleteRowHeight()
     {
         var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");
         try
@@ -56,7 +55,6 @@ public sealed class CalibrationTests
             Assert.Equal(CalibratedRegion.CombatLogId, region.Id);
             Assert.Equal("Combat log", region.Name);
             Assert.Equal(new NormalizedCrop(0.1, 0.2, 0.3, 0.4), region.Crop);
-            Assert.Equal(24, settings.RowHeightPixels);
         }
         finally
         {

@@ -50,7 +50,7 @@ public sealed class WindowsCombatLogOcrEngine : ICombatLogOcrEngine
         var result = await _engine.RecognizeAsync(bitmap);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var frameHash = RowChangeDetector.Fnv1a64(sourceFrame.BgraPixels);
+        var frameHash = FrameHasher.Fnv1a64(sourceFrame.BgraPixels);
         var recognizedLines = new List<RecognizedCombatLogLine>();
         var pendingText = new StringBuilder();
         var pendingWords = new List<RecognizedWord>();

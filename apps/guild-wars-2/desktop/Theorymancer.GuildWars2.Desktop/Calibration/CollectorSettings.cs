@@ -3,9 +3,9 @@ using System.IO;
 
 namespace Theorymancer.GuildWars2.Desktop.Calibration;
 
-public sealed record CollectorSettings(IReadOnlyList<CalibratedRegion> Regions, int RowHeightPixels)
+public sealed record CollectorSettings(IReadOnlyList<CalibratedRegion> Regions)
 {
-    public static CollectorSettings Default { get; } = new(Array.Empty<CalibratedRegion>(), RowHeightPixels: 20);
+    public static CollectorSettings Default { get; } = new(Array.Empty<CalibratedRegion>());
 
     public NormalizedCrop? CombatLogCrop => Regions
         .FirstOrDefault(region => region.Id == CalibratedRegion.CombatLogId)
@@ -41,10 +41,9 @@ public sealed class CollectorSettingsStore
             var legacySettings = JsonSerializer.Deserialize<LegacyCollectorSettings>(json, JsonOptions);
             return legacySettings?.Crop is { } crop
                 ? new CollectorSettings(
-                    [new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", crop)],
-                    legacySettings.RowHeightPixels)
+                    [new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", crop)])
                 : legacySettings is not null
-                    ? new CollectorSettings(Array.Empty<CalibratedRegion>(), legacySettings.RowHeightPixels)
+                    ? new CollectorSettings(Array.Empty<CalibratedRegion>())
                     : CollectorSettings.Default;
         }
         catch (IOException)
@@ -65,5 +64,5 @@ public sealed class CollectorSettingsStore
         File.Move(temporaryPath, _path, overwrite: true);
     }
 
-    private sealed record LegacyCollectorSettings(NormalizedCrop? Crop, int RowHeightPixels);
+    private sealed record LegacyCollectorSettings(NormalizedCrop? Crop);
 }

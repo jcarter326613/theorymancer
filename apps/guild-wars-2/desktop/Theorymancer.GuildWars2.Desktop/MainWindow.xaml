@@ -31,16 +31,11 @@
         <ColumnDefinition Width="12" />
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="12" />
-        <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <Button Grid.Column="0" Padding="12,6" Click="SelectWindow_Click" Content="Select GW2 window" />
       <Button Grid.Column="2" Padding="12,6" Click="Calibrate_Click" Content="Calibrate combat log" />
-      <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock VerticalAlignment="Center" Text="Row height (px):" />
-        <TextBox x:Name="RowHeightTextBox" Width="50" Margin="6,0,0,0" Text="20" />
-      </StackPanel>
-      <TextBlock Grid.Column="5" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
+      <TextBlock Grid.Column="4" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
     </Grid>
 
     <StackPanel x:Name="CalibrationControls" Grid.Row="3" Margin="0,8,0,0" Orientation="Horizontal" Visibility="Collapsed">
