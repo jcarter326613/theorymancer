@@ -23,30 +23,30 @@ public sealed class CombatLogFrameMatcherTests
         yield return Case(
             history:
             [
-                Spec(10, "A.", "red"),
-                Spec(11, "G.", "green"),
-                Spec(12, "H.", "blue"),
+                Spec(0, "A.", "red"),
+                Spec(1, "G.", "green"),
+                Spec(2, "H.", "blue"),
             ],
             current:
             [
-                Spec(3, "G.", "green"),
-                Spec(4, "H.", "blue"),
-                Spec(5, "R.", "red"),
-                Spec(6, "Q.", "green"),
+                Spec(0, "G.", "green"),
+                Spec(1, "H.", "blue"),
+                Spec(2, "R.", "red"),
+                Spec(3, "Q.", "green"),
             ],
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 2,
-            expectedLines: [Spec(5, "R.", "red"), Spec(6, "Q.", "green")]);
+            expectedLines: [Spec(2, "R.", "red"), Spec(3, "Q.", "green")]);
 
         yield return Case(
             history: [Spec(0, "You hit the monster for 123 using Storm Strike.", "red")],
-            current: [Spec(4, "You hit the monster for 123 using Storm Strike.", "blue")],
+            current: [Spec(0, "You hit the monster for 123 using Storm Strike.", "blue")],
             decision: FrameMatchDecision.NoOverlap,
             matchedLineCount: 0,
-            expectedLines: [Spec(4, "You hit the monster for 123 using Storm Strike.", "blue")]);
+            expectedLines: [Spec(0, "You hit the monster for 123 using Storm Strike.", "blue")]);
 
         yield return Case(
-            history: [Spec(2, "You hit the monster for 123 using Storm Strike.", "green")],
+            history: [Spec(0, "You hit the monster for 123 using Storm Strike.", "green")],
             current: [Spec(0, "You hit the monster for 123 using Storm Strike.", "unknown")],
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 1,
@@ -73,17 +73,17 @@ public sealed class CombatLogFrameMatcherTests
          */
         yield return Case(
             history: [Spec(0, "G.", "green"), Spec(2, "H.", "blue")],
-            current: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")],
+            current: [Spec(0, "G.", "green"), Spec(1, "H.", "blue"), Spec(2, "R.", "red")],
             decision: FrameMatchDecision.NoOverlap,
             matchedLineCount: 0,
-            expectedLines: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")]);
+            expectedLines: [Spec(0, "G.", "green"), Spec(1, "H.", "blue"), Spec(2, "R.", "red")]);
             
         yield return Case(
             history: [Spec(0, "G.", "green"), Spec(1, "H.", "blue")],
-            current: [Spec(4, "G.", "green"), Spec(5, "H.", "blue"), Spec(6, "R.", "red")],
+            current: [Spec(0, "G.", "green"), Spec(1, "H.", "blue"), Spec(2, "R.", "red")],
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 2,
-            expectedLines: [Spec(6, "R.", "red")]);
+            expectedLines: [Spec(2, "R.", "red")]);
             
         yield return Case(
             history: [
@@ -188,11 +188,11 @@ public sealed class CombatLogFrameMatcherTests
             ]);
 
         yield return Case(
-            history: [Spec(0, "Great.", "green"), Spec(1, "Hello.", "blue")],
-            current: [Spec(4, "Gr3at.", "green"), Spec(5, "Hello.", "blue"), Spec(6, "Ready.", "red")],
+            history: [Spec(4, "Great.", "green"), Spec(5, "Hello.", "blue")],
+            current: [Spec(0, "Gr3at.", "green"), Spec(1, "Hello.", "blue"), Spec(2, "Ready.", "red")],
             decision: FrameMatchDecision.Overlap,
             matchedLineCount: 2,
-            expectedLines: [Spec(6, "Ready.", "red")]);
+            expectedLines: [Spec(2, "Ready.", "red")]);
     }
 
     private static object[] Case(
