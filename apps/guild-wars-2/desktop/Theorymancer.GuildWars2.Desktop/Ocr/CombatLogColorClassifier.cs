@@ -175,6 +175,8 @@ public static class CombatLogColorClassifier
 
     private struct ColorSamples
     {
+        private const double MaximumColorDistanceSquared = 40 * 40;
+
         private long _red;
         private long _green;
         private long _blue;
@@ -202,27 +204,32 @@ public static class CombatLogColorClassifier
                 return "unknown";
             }
 
-            if (_red > _green * 13 / 10 && _red > _blue * 13 / 10)
+            var redDistance = DistanceFrom(218, 49, 49);
+            var blueDistance = DistanceFrom(206, 81, 207);
+            var greenDistance = DistanceFrom(203, 118, 2);
+            var closestDistance = Math.Min(redDistance, Math.Min(blueDistance, greenDistance));
+            if (closestDistance > MaximumColorDistanceSquared)
+            {
+                return "unknown";
+            }
+
+            if (redDistance < blueDistance && redDistance < greenDistance)
             {
                 return "red";
             }
 
-            if (_green > _red * 13 / 10 && _green > _blue * 13 / 10)
-            {
-                return "green";
-            }
+            return blueDistance < greenDistance ? "blue" : "green";
+        }
 
-            if (_blue > _red * 13 / 10 && _blue > _green * 13 / 10)
-            {
-                return "blue";
-            }
-
-            if (_red > _blue * 13 / 10 && _green > _blue * 13 / 10)
-            {
-                return "yellow";
-            }
-
-            return "unknown";
+        private readonly double DistanceFrom(byte red, byte green, byte blue)
+        {
+            var averageRed = (double)_red / _count;
+            var averageGreen = (double)_green / _count;
+            var averageBlue = (double)_blue / _count;
+            var redDifference = averageRed - red;
+            var greenDifference = averageGreen - green;
+            var blueDifference = averageBlue - blue;
+            return redDifference * redDifference + greenDifference * greenDifference + blueDifference * blueDifference;
         }
     }
 }

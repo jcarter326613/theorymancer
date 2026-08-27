@@ -6,11 +6,11 @@ namespace Theorymancer.GuildWars2.Desktop.Tests;
 public sealed class CombatLogColorClassifierTests
 {
     [Theory]
-    [InlineData(20, 20, 220, "red")]
-    [InlineData(20, 220, 20, "green")]
-    [InlineData(220, 20, 20, "blue")]
-    [InlineData(20, 220, 220, "yellow")]
-    public void Classify_UsesTheDominantTextColor(byte blue, byte green, byte red, string expected)
+    [InlineData(49, 49, 218, "red")]
+    [InlineData(207, 81, 206, "blue")]
+    [InlineData(2, 118, 203, "green")]
+    [InlineData(49, 49, 178, "red")]
+    public void Classify_UsesTheCalibratedTextColor(byte blue, byte green, byte red, string expected)
     {
         var pixels = Enumerable.Range(0, 64)
             .SelectMany(_ => new byte[] { blue, green, red, 255 })
@@ -28,11 +28,21 @@ public sealed class CombatLogColorClassifierTests
     }
 
     [Fact]
+    public void Classify_ReturnsUnknownWhenColorExceedsCalibrationDistance()
+    {
+        var pixels = Enumerable.Range(0, 64)
+            .SelectMany(_ => new byte[] { 49, 49, 177, 255 })
+            .ToArray();
+
+        Assert.Equal("unknown", CombatLogColorClassifier.Classify(pixels));
+    }
+
+    [Fact]
     public void Classify_UsesOnlyTheNumberAfterFor()
     {
-        var frame = CreateFrame(width: 12, height: 4, blue: 20, green: 20, red: 220);
-        Paint(frame, x: 0, y: 0, width: 2, height: 4, blue: 220, green: 20, red: 20);
-        Paint(frame, x: 6, y: 0, width: 3, height: 4, blue: 20, green: 220, red: 20);
+        var frame = CreateFrame(width: 12, height: 4, blue: 49, green: 49, red: 218);
+        Paint(frame, x: 0, y: 0, width: 2, height: 4, blue: 207, green: 81, red: 206);
+        Paint(frame, x: 6, y: 0, width: 3, height: 4, blue: 2, green: 118, red: 203);
         RecognizedWord[] words =
         [
             Word("2", 0, 0, 2, 4),
@@ -47,8 +57,8 @@ public sealed class CombatLogColorClassifierTests
     [Fact]
     public void Classify_UsesTheOnlyNumberWhenForIsAbsent()
     {
-        var frame = CreateFrame(width: 8, height: 4, blue: 20, green: 20, red: 220);
-        Paint(frame, x: 3, y: 0, width: 3, height: 4, blue: 220, green: 20, red: 20);
+        var frame = CreateFrame(width: 8, height: 4, blue: 49, green: 49, red: 218);
+        Paint(frame, x: 3, y: 0, width: 3, height: 4, blue: 207, green: 81, red: 206);
         RecognizedWord[] words = [Word("You", 0, 0, 3, 4), Word("123", 3, 0, 3, 4)];
 
         Assert.Equal("blue", CombatLogColorClassifier.Classify(frame, words));
@@ -57,8 +67,8 @@ public sealed class CombatLogColorClassifierTests
     [Fact]
     public void Classify_CombinesOcrSplitCommaSeparatedDamageNumbers()
     {
-        var frame = CreateFrame(width: 12, height: 4, blue: 20, green: 20, red: 220);
-        Paint(frame, x: 4, y: 0, width: 5, height: 4, blue: 20, green: 220, red: 20);
+        var frame = CreateFrame(width: 12, height: 4, blue: 49, green: 49, red: 218);
+        Paint(frame, x: 4, y: 0, width: 5, height: 4, blue: 2, green: 118, red: 203);
         RecognizedWord[] words =
         [
             Word("You", 0, 0, 3, 4),
@@ -74,7 +84,7 @@ public sealed class CombatLogColorClassifierTests
     [Fact]
     public void Classify_ReturnsUnknownForAmbiguousNumbersWithoutFor()
     {
-        var frame = CreateFrame(width: 8, height: 4, blue: 20, green: 20, red: 220);
+        var frame = CreateFrame(width: 8, height: 4, blue: 49, green: 49, red: 218);
         RecognizedWord[] words = [Word("123", 0, 0, 3, 4), Word("and", 3, 0, 2, 4), Word("456", 5, 0, 3, 4)];
 
         Assert.Equal("unknown", CombatLogColorClassifier.Classify(frame, words));
@@ -83,7 +93,7 @@ public sealed class CombatLogColorClassifierTests
     [Fact]
     public void Classify_ReturnsUnknownWhenTheLineHasNoNumber()
     {
-        var frame = CreateFrame(width: 6, height: 4, blue: 20, green: 220, red: 20);
+        var frame = CreateFrame(width: 6, height: 4, blue: 2, green: 118, red: 203);
         RecognizedWord[] words = [Word("You", 0, 0, 3, 4), Word("dodged", 3, 0, 3, 4)];
 
         Assert.Equal("unknown", CombatLogColorClassifier.Classify(frame, words));
