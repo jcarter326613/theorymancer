@@ -1,5 +1,6 @@
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
+using Theorymancer.GuildWars2.Desktop.SkillBar;
 using System.IO;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
@@ -69,6 +70,30 @@ public sealed class CalibrationTests
             store.Save(expected);
 
             Assert.Equal(expected.Regions, store.Load().Regions);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void CollectorSettingsStore_PersistsTheDerivedSkillBarLayout()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");
+        try
+        {
+            var layout = new SkillBarLayout(
+                Enum.GetValues<SkillBarComponentKind>()
+                    .Select(kind => new SkillBarComponent(kind, 0.1, 0.2, 0.1, 0.1, 0.9))
+                    .ToList());
+            var store = new CollectorSettingsStore(path);
+
+            store.Save(new CollectorSettings([], layout));
+
+            var actual = store.Load().SkillBarLayout;
+            Assert.NotNull(actual);
+            Assert.Equal(layout.Components, actual.Components);
         }
         finally
         {

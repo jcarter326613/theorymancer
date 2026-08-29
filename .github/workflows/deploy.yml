@@ -47,11 +47,14 @@ jobs:
               run: |
                   WEB_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/web:${IMAGE_TAG}"
                   API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/api:${IMAGE_TAG}"
+                  GUILD_WARS_2_API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/guild-wars-2-api:${IMAGE_TAG}"
                   docker build --build-arg "VITE_API_URL=" -f apps/web/Dockerfile -t "$WEB_IMAGE" .
                   docker build -f apps/api/Dockerfile -t "$API_IMAGE" .
+                  docker build -f apps/guild-wars-2/api/Dockerfile -t "$GUILD_WARS_2_API_IMAGE" .
                   docker push "$WEB_IMAGE"
                   docker push "$API_IMAGE"
-                  printf 'WEB_IMAGE=%s\nAPI_IMAGE=%s\n' "$WEB_IMAGE" "$API_IMAGE" >> "$GITHUB_ENV"
+                  docker push "$GUILD_WARS_2_API_IMAGE"
+                  printf 'WEB_IMAGE=%s\nAPI_IMAGE=%s\nGUILD_WARS_2_API_IMAGE=%s\n' "$WEB_IMAGE" "$API_IMAGE" "$GUILD_WARS_2_API_IMAGE" >> "$GITHUB_ENV"
 
             - uses: hashicorp/setup-terraform@v3
 
@@ -70,11 +73,14 @@ jobs:
                   -var="region=${GCP_REGION}"
                   -var="web_image=${WEB_IMAGE}"
                   -var="api_image=${API_IMAGE}"
+                  -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
 
             - name: Smoke test deployed services
               working-directory: infrastructure/environments/${{ inputs.environment }}
               run: |
                   WEB_URL="$(terraform output -raw web_url)"
                   API_URL="$(terraform output -raw api_url)"
+                  GUILD_WARS_2_API_URL="$(terraform output -raw guild_wars_2_api_url)"
                   curl --fail --retry 5 --retry-delay 3 "$WEB_URL"
                   curl --fail --retry 5 --retry-delay 3 "$API_URL/health"
+                  curl --fail --retry 5 --retry-delay 3 "$GUILD_WARS_2_API_URL/health"

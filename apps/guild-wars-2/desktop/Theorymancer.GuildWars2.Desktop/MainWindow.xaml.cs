@@ -82,9 +82,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedWindow is null || _settings.CombatLogCrop is null || _settings.SkillBarCrop is null)
+        if (_selectedWindow is null ||
+            _settings.CombatLogCrop is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasWeaponSkillSlots: true })
         {
-            ShowSetupError("Select the GW2 window and calibrate both required interface regions before recording.");
+            ShowSetupError("Select the GW2 window, calibrate both required interface regions, and analyze the skill-bar layout before recording.");
             return;
         }
 
@@ -197,9 +200,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void RunDiagnosticOcr_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedWindow is null || _settings.CombatLogCrop is null || _settings.SkillBarCrop is null)
+        if (_selectedWindow is null ||
+            _settings.CombatLogCrop is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasWeaponSkillSlots: true })
         {
-            ShowSetupError("Select the Guild Wars 2 window and calibrate both required interface regions before running diagnostic OCR.");
+            ShowSetupError("Select the Guild Wars 2 window, calibrate both required interface regions, and analyze the skill-bar layout before running diagnostic OCR.");
             return;
         }
 

@@ -9,6 +9,11 @@ resource "google_service_account" "runtime" {
   display_name = "Theorymancer development runtime"
 }
 
+resource "google_service_account" "guild_wars_2_api" {
+  account_id   = "tm-development-gw2-api"
+  display_name = "Theorymancer development Guild Wars 2 API"
+}
+
 resource "google_storage_bucket" "uploads" {
   name                        = local.uploads_bucket_name
   location                    = var.region
@@ -36,6 +41,12 @@ resource "google_storage_bucket" "game_assets" {
   }
 }
 
+resource "google_storage_bucket_iam_member" "guild_wars_2_api_game_assets" {
+  bucket = google_storage_bucket.game_assets.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.guild_wars_2_api.email}"
+}
+
 module "web" {
   source = "../../modules/cloud-run-service"
 
@@ -56,5 +67,18 @@ module "api" {
   service_account_email = google_service_account.runtime.email
   environment_variables = {
     UPLOADS_BUCKET = google_storage_bucket.uploads.name
+  }
+}
+
+module "guild_wars_2_api" {
+  source = "../../modules/cloud-run-service"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = "theorymancer-development-guild-wars-2-api"
+  image                 = var.guild_wars_2_api_image
+  service_account_email = google_service_account.guild_wars_2_api.email
+  environment_variables = {
+    GAME_ASSETS_BUCKET = google_storage_bucket.game_assets.name
   }
 }

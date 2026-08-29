@@ -6,9 +6,11 @@ ingestion, mechanics models, and deterministic performance analysis.
 `desktop/` is a self-contained C# WPF companion application for capturing the
 visible, calibrated combat-log panel and recognizing changed rows locally. It
 requires calibration of both the combat log and skill bar, which is retained
-across sessions; skill-bar sampling is not implemented yet. It never loads into
-the game client, accesses game memory, or intercepts network traffic. It must
-be run with Guild Wars 2 visible and unobscured.
+across sessions. Skill-bar calibration detects and displays its five weapon
+slots for review before saving; it does not yet identify the icons or sample
+skill activations. It never loads into the game client, accesses game memory,
+or intercepts network traffic. It must be run with Guild Wars 2 visible and
+unobscured.
 
 The collector targets Windows 10 version 2004 or later on x64 hardware. It
 uses Windows' English OCR language pack; install that pack through Windows
@@ -29,6 +31,26 @@ dotnet publish apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorym
 
 The publish directory contains `TheorymancerScreenCollector.exe`, which can be
 started by double-clicking it.
+
+## Icon Assets
+
+`assets/icons.manifest.json` is the versioned source of truth for immutable GW2
+icon assets. It records the public canonical source URL, SHA-256, and
+content-addressed Cloud Storage object path for each icon. The PNG corpus is not
+committed to Git or Git LFS.
+
+After the applicable Terraform environment has created its game-assets bucket,
+publish the manifest locally with authenticated `gcloud`:
+
+```powershell
+pwsh apps/guild-wars-2/assets/sync-icons.ps1 -Bucket YOUR_GAME_ASSETS_BUCKET
+```
+
+The **Sync Guild Wars 2 Assets** GitHub Actions workflow provides the same
+operation through the existing Workload Identity Federation deployment identity.
+The desktop collector downloads a missing manifest icon from its canonical source,
+verifies its hash, and retains it in a local cache. A later API endpoint will
+serve the same verified assets from Cloud Storage instead.
 
 ## OCR Row Model
 
@@ -58,6 +80,7 @@ directory. That directory also contains `activity_log.jsonl`, which records
 visible activity entries and the correlated matcher result for each processed OCR
 frame.
 Diagnostic previews are not saved.
+
 
 Game analysis workloads remain independent of the public website and API and
 may use Python or another runtime when their requirements justify it.

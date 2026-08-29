@@ -12,10 +12,10 @@ public partial class CalibrationOverlay : Window
 {
     private const uint SwpShowWindow = 0x0040;
     private static readonly Brush RegionBorderBrush = new SolidColorBrush(Color.FromRgb(63, 169, 245));
-    private static readonly Brush RegionFillBrush = new SolidColorBrush(Color.FromArgb(34, 63, 169, 245));
     private readonly ScreenBounds _clientBounds;
     private readonly string _regionId;
     private readonly string _regionName;
+    private readonly IReadOnlyList<CalibratedRegion> _contextRegions;
     private Point? _dragStart;
     private ScreenBounds? _regionBounds;
     private ScreenBounds? _draftBounds;
@@ -26,11 +26,13 @@ public partial class CalibrationOverlay : Window
         ScreenBounds clientBounds,
         string regionId,
         string regionName,
-        NormalizedCrop? existingCrop)
+        NormalizedCrop? existingCrop,
+        IReadOnlyList<CalibratedRegion> contextRegions)
     {
         _clientBounds = clientBounds;
         _regionId = regionId;
         _regionName = regionName;
+        _contextRegions = contextRegions;
         InitializeComponent();
         Left = clientBounds.X;
         Top = clientBounds.Y;
@@ -163,25 +165,41 @@ public partial class CalibrationOverlay : Window
     private void RenderRegion()
     {
         OverlayCanvas.Children.Clear();
+        foreach (var region in _contextRegions.Where(region => region.Id != _regionId))
+        {
+            try
+            {
+                AddRegionVisual(region.Crop.ToScreenBounds(_clientBounds), region.Name, Brushes.SlateGray, 24);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
         var bounds = _draftBounds ?? _regionBounds;
         if (bounds is null)
         {
             return;
         }
 
-        var topLeft = OverlayCanvas.PointFromScreen(new Point(bounds.Value.X, bounds.Value.Y));
-        var bottomRight = OverlayCanvas.PointFromScreen(new Point(bounds.Value.Right, bounds.Value.Bottom));
+        AddRegionVisual(bounds.Value, _regionName, RegionBorderBrush, 34);
+    }
+
+    private void AddRegionVisual(ScreenBounds bounds, string name, Brush borderBrush, byte fillAlpha)
+    {
+        var topLeft = OverlayCanvas.PointFromScreen(new Point(bounds.X, bounds.Y));
+        var bottomRight = OverlayCanvas.PointFromScreen(new Point(bounds.Right, bounds.Bottom));
         var visual = new Border
         {
-            BorderBrush = RegionBorderBrush,
+            BorderBrush = borderBrush,
             BorderThickness = new Thickness(2),
-            Background = RegionFillBrush,
+            Background = new SolidColorBrush(Color.FromArgb(fillAlpha, 63, 169, 245)),
             IsHitTestVisible = false,
             Child = new TextBlock
             {
                 Margin = new Thickness(6, 3, 6, 3),
                 Foreground = Brushes.White,
-                Text = _regionName,
+                Text = name,
             },
         };
         Canvas.SetLeft(visual, topLeft.X);

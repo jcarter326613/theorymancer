@@ -12,6 +12,7 @@ coverage
 .vs/
 TestResults/
 debug-ocr-frames/
+debug-skill-bar-layout/
 *.user
 .terraform/
 *.tfstate

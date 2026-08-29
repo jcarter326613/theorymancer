@@ -1,0 +1,11 @@
+<Window x:Class="Theorymancer.GuildWars2.Desktop.Calibration.CalibrationPreviewOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#01000000"
+        Topmost="True"
+        ShowActivated="False"
+        ShowInTaskbar="False">
+  <Canvas x:Name="OverlayCanvas" Background="#01000000" IsHitTestVisible="False" />
+</Window>

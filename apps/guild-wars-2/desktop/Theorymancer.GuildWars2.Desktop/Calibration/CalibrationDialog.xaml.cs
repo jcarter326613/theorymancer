@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Theorymancer.GuildWars2.Desktop.Capture;
+using Theorymancer.GuildWars2.Desktop.SkillBar;
 
 namespace Theorymancer.GuildWars2.Desktop.Calibration;
 
@@ -10,6 +12,8 @@ public partial class CalibrationDialog : Window
     private readonly IReadOnlyList<CalibratedRegion> _otherRegions;
     private NormalizedCrop? _combatLogCrop;
     private NormalizedCrop? _skillBarCrop;
+    private SkillBarLayout? _skillBarLayout;
+    private CalibrationPreviewOverlay? _previewOverlay;
 
     public CalibrationDialog(SelectedGameWindow gameWindow, CollectorSettings settings)
     {
@@ -19,7 +23,10 @@ public partial class CalibrationDialog : Window
             .ToList();
         _combatLogCrop = settings.CombatLogCrop;
         _skillBarCrop = settings.SkillBarCrop;
+        _skillBarLayout = settings.SkillBarLayout;
         InitializeComponent();
+        Loaded += (_, _) => RefreshPreviewOverlay();
+        Closed += (_, _) => ClosePreviewOverlay();
         UpdateControls();
     }
 
@@ -28,13 +35,74 @@ public partial class CalibrationDialog : Window
             .. _otherRegions,
             new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop!),
             new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", _skillBarCrop!),
-        ]);
+        ],
+        _skillBarLayout);
 
-    private void CalibrateCombatLog_Click(object sender, RoutedEventArgs e) =>
-        CalibrateRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop, region => _combatLogCrop = region.Crop);
+    private void CalibrateCombatLog_Click(object sender, RoutedEventArgs e)
+    {
+        var region = PromptForRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop);
+        if (region is null)
+        {
+            return;
+        }
 
-    private void CalibrateSkillBar_Click(object sender, RoutedEventArgs e) =>
-        CalibrateRegion(CalibratedRegion.SkillBarId, "Skill bar", _skillBarCrop, region => _skillBarCrop = region.Crop);
+        _combatLogCrop = region.Crop;
+        UpdateControls();
+        RefreshPreviewOverlay();
+    }
+
+    private async void CalibrateSkillBar_Click(object sender, RoutedEventArgs e)
+    {
+        var region = PromptForRegion(CalibratedRegion.SkillBarId, "Skill bar", _skillBarCrop);
+        if (region is null)
+        {
+            return;
+        }
+
+        try
+        {
+            HidePreviewOverlay();
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            var capture = new VisibleScreenRegionCapture(_gameWindow, region.Crop);
+            var frame = await capture.CaptureAsync(CancellationToken.None);
+            var words = await WindowsHudOcrEngine.CreateEnglish().RecognizeWordsAsync(frame, CancellationToken.None);
+            var detection = SkillBarLayoutDetector.Detect(frame, words);
+            var nightfallIconPath = await ReferenceIcons.GetNightfallPathAsync(CancellationToken.None);
+            var nightfallMatch = IconTemplateMatcher.FindBestMatch(
+                frame,
+                nightfallIconPath,
+                "Nightfall",
+                ReferenceIcons.NightfallSkillId);
+            if (!_gameWindow.TryGetClientBounds(out var clientBounds))
+            {
+                throw new InvalidOperationException("Guild Wars 2 is no longer available. Select its window again.");
+            }
+
+            var review = new SkillBarLayoutReviewOverlay(
+                clientBounds,
+                region,
+                BuildContextRegions(region.Crop),
+                detection,
+                nightfallMatch)
+            {
+                Owner = this,
+            };
+            if (review.ShowDialog() == true && review.AcceptedLayout is { } layout)
+            {
+                _skillBarCrop = region.Crop;
+                _skillBarLayout = layout;
+                UpdateControls();
+            }
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, $"Skill-bar analysis failed: {exception.Message}", "Theorymancer collector", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            RefreshPreviewOverlay();
+        }
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -48,33 +116,77 @@ public partial class CalibrationDialog : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private bool IsComplete => _combatLogCrop is not null && _skillBarCrop is not null;
+    private bool IsComplete =>
+        _combatLogCrop is not null &&
+        _skillBarCrop is not null &&
+        _skillBarLayout is { HasWeaponSkillSlots: true };
 
-    private void CalibrateRegion(
+    private CalibratedRegion? PromptForRegion(
         string regionId,
         string regionName,
-        NormalizedCrop? existingCrop,
-        Action<CalibratedRegion> setRegion)
+        NormalizedCrop? existingCrop)
     {
         if (!_gameWindow.TryGetClientBounds(out var clientBounds))
         {
             MessageBox.Show(this, "Guild Wars 2 is no longer available. Select its window again.", "Theorymancer collector", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+
+        CalibratedRegion? selectedRegion = null;
+        var overlay = new CalibrationOverlay(clientBounds, regionId, regionName, existingCrop, BuildContextRegions()) { Owner = this };
+        overlay.Confirmed += region => selectedRegion = region;
+        HidePreviewOverlay();
+        _ = overlay.ShowDialog();
+        RefreshPreviewOverlay();
+        return selectedRegion;
+    }
+
+    private IReadOnlyList<CalibratedRegion> BuildContextRegions(NormalizedCrop? skillBarCrop = null)
+    {
+        var regions = _otherRegions.ToList();
+        if (_combatLogCrop is not null)
+        {
+            regions.Add(new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop));
+        }
+
+        if ((skillBarCrop ?? _skillBarCrop) is { } crop)
+        {
+            regions.Add(new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", crop));
+        }
+
+        return regions;
+    }
+
+    private void RefreshPreviewOverlay()
+    {
+        ClosePreviewOverlay();
+        if (!_gameWindow.TryGetClientBounds(out var clientBounds))
+        {
             return;
         }
 
-        var overlay = new CalibrationOverlay(clientBounds, regionId, regionName, existingCrop) { Owner = this };
-        overlay.Confirmed += region =>
+        var regions = BuildContextRegions();
+        if (regions.Count == 0)
         {
-            setRegion(region);
-            UpdateControls();
-        };
-        _ = overlay.ShowDialog();
+            return;
+        }
+
+        _previewOverlay = new CalibrationPreviewOverlay(clientBounds, regions, _skillBarLayout) { Owner = this };
+        _previewOverlay.Show();
+    }
+
+    private void HidePreviewOverlay() => _previewOverlay?.Hide();
+
+    private void ClosePreviewOverlay()
+    {
+        _previewOverlay?.Close();
+        _previewOverlay = null;
     }
 
     private void UpdateControls()
     {
         UpdateStatus(CombatLogStatusText, _combatLogCrop is not null);
-        UpdateStatus(SkillBarStatusText, _skillBarCrop is not null);
+        UpdateStatus(SkillBarStatusText, _skillBarCrop is not null && _skillBarLayout is { HasWeaponSkillSlots: true });
         SaveButton.IsEnabled = IsComplete;
     }
 

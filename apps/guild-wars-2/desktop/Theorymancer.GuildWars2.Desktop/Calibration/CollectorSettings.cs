@@ -1,9 +1,12 @@
 using System.Text.Json;
 using System.IO;
+using Theorymancer.GuildWars2.Desktop.SkillBar;
 
 namespace Theorymancer.GuildWars2.Desktop.Calibration;
 
-public sealed record CollectorSettings(IReadOnlyList<CalibratedRegion> Regions)
+public sealed record CollectorSettings(
+    IReadOnlyList<CalibratedRegion> Regions,
+    SkillBarLayout? SkillBarLayout = null)
 {
     public static CollectorSettings Default { get; } = new(Array.Empty<CalibratedRegion>());
 

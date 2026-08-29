@@ -13,6 +13,11 @@ output "game_assets_bucket" {
   value       = google_storage_bucket.game_assets.name
 }
 
+output "guild_wars_2_api_url" {
+  description = "Development Guild Wars 2 API URL."
+  value       = module.guild_wars_2_api.uri
+}
+
 output "web_url" {
   description = "Development website URL."
   value       = module.web.uri
