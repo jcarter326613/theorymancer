@@ -1,6 +1,9 @@
 name: Deploy
 
 on:
+    push:
+        branches:
+            - main
     workflow_dispatch:
         inputs:
             environment:
@@ -17,14 +20,14 @@ permissions:
 
 jobs:
     deploy:
-        name: Deploy ${{ inputs.environment }}
+        name: Deploy ${{ inputs.environment || 'development' }}
         runs-on: ubuntu-latest
-        environment: ${{ inputs.environment }}
+        environment: ${{ inputs.environment || 'development' }}
         concurrency:
-            group: theorymancer-${{ inputs.environment }}
+            group: theorymancer-${{ inputs.environment || 'development' }}
             cancel-in-progress: false
         env:
-            ENVIRONMENT: ${{ inputs.environment }}
+            ENVIRONMENT: ${{ inputs.environment || 'development' }}
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
             GCP_REGION: ${{ vars.GCP_REGION }}
             TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -59,14 +62,14 @@ jobs:
             - uses: hashicorp/setup-terraform@v3
 
             - name: Initialize Terraform
-              working-directory: infrastructure/environments/${{ inputs.environment }}
+              working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
               run: >-
                   terraform init -input=false
                   -backend-config="bucket=${TF_STATE_BUCKET}"
                   -backend-config=backend.hcl
 
             - name: Apply infrastructure
-              working-directory: infrastructure/environments/${{ inputs.environment }}
+              working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
               run: >-
                   terraform apply -input=false -auto-approve
                   -var="project_id=${GCP_PROJECT_ID}"
@@ -76,7 +79,7 @@ jobs:
                   -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
 
             - name: Smoke test deployed services
-              working-directory: infrastructure/environments/${{ inputs.environment }}
+              working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
               run: |
                   WEB_URL="$(terraform output -raw web_url)"
                   API_URL="$(terraform output -raw api_url)"
