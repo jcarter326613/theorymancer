@@ -46,3 +46,7 @@ Read [`infrastructure/README.md`](infrastructure/README.md) before applying
 Terraform. Bootstrap the project once to establish GitHub OIDC and the shared
 Artifact Registry, then deploy either the development or production
 environment.
+
+## License
+
+License: Source available for viewing only. All rights reserved. See LICENSE.
