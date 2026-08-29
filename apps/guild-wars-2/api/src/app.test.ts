@@ -6,6 +6,12 @@ import type { Server } from "node:http"
 
 import { createApp, parseManifest } from "./app.js"
 import type { ObjectStore } from "./app.js"
+import { AuthenticationRejectedError } from "./auth.js"
+import type { Authenticator } from "./auth.js"
+import type {
+    AuthFailureReport,
+    AuthFailureReporter,
+} from "./auth-failure-reporter.js"
 
 const iconAssetId = "a784986f-696d-4c63-8f46-4cc53efc9b47"
 const manifestPath = "guild-wars-2/icons.manifest.json"
@@ -44,6 +50,14 @@ const manifest = JSON.stringify({
 })
 
 const servers: Server[] = []
+const validAuthenticator: Authenticator = {
+    async authenticate() {},
+}
+const unblockedReporter: AuthFailureReporter = {
+    async report() {
+        return { blocked: false }
+    },
+}
 
 afterEach(async () => {
     for (const server of servers.splice(0)) {
@@ -59,6 +73,80 @@ void test("returns the validated manifest", async () => {
 
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), JSON.parse(manifest))
+})
+
+void test("does not consult IP blocking for valid authentication", async () => {
+    const response = await request(
+        new MapObjectStore(new Map([[manifestPath, manifest]])),
+        "/icons/manifest",
+        { authFailureReporter: unavailableReporter() },
+    )
+
+    assert.equal(response.status, 200)
+})
+
+void test("keeps health public", async () => {
+    const response = await request(new MapObjectStore(new Map()), "/health", {
+        authenticator: rejectingAuthenticator(),
+        authFailureReporter: unavailableReporter(),
+    })
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), {
+        status: "ok",
+        service: "guild-wars-2-api",
+    })
+})
+
+void test("rejects unauthenticated requests before reading storage", async () => {
+    const objectStore = new MapObjectStore(new Map([[manifestPath, manifest]]))
+    let reportedIp: string | undefined
+    const response = await request(objectStore, "/icons/manifest", {
+        authenticator: rejectingAuthenticator(),
+        authFailureReporter: reporter(async (ip) => {
+            reportedIp = ip
+            return { blocked: false }
+        }),
+        headers: { "X-Forwarded-For": "198.51.100.3, 203.0.113.8" },
+    })
+
+    assert.equal(response.status, 401)
+    assert.equal(response.headers.get("www-authenticate"), "DPoP")
+    assert.equal(response.headers.get("cache-control"), "no-store")
+    assert.equal(reportedIp, "203.0.113.8")
+    assert.equal(objectStore.downloadCount, 0)
+})
+
+void test("returns the parent block response", async () => {
+    const response = await request(
+        new MapObjectStore(new Map([[manifestPath, manifest]])),
+        "/icons/manifest",
+        {
+            authenticator: rejectingAuthenticator(),
+            authFailureReporter: reporter(async () => ({
+                blocked: true,
+                retryAfterSeconds: 47,
+            })),
+        },
+    )
+
+    assert.equal(response.status, 429)
+    assert.equal(response.headers.get("retry-after"), "47")
+    assert.equal(response.headers.get("cache-control"), "no-store")
+})
+
+void test("fails closed when authentication failure reporting is unavailable", async () => {
+    const response = await request(
+        new MapObjectStore(new Map([[manifestPath, manifest]])),
+        "/icons/manifest",
+        {
+            authenticator: rejectingAuthenticator(),
+            authFailureReporter: unavailableReporter(),
+        },
+    )
+
+    assert.equal(response.status, 503)
+    assert.equal(response.headers.get("cache-control"), "no-store")
 })
 
 void test("validates the source icon manifest", async () => {
@@ -90,7 +178,7 @@ void test("returns only manifest-listed icon objects", async () => {
     assert.equal(response.headers.get("content-type"), "image/png")
     assert.equal(
         response.headers.get("cache-control"),
-        "public, max-age=31536000, immutable",
+        "private, max-age=31536000, immutable",
     )
     assert.equal(await response.text(), "png-bytes")
 })
@@ -143,9 +231,12 @@ void test("does not serve an invalid manifest", async () => {
 })
 
 class MapObjectStore implements ObjectStore {
+    public downloadCount = 0
+
     public constructor(private readonly objects: Map<string, string>) {}
 
     public async download(objectPath: string): Promise<Buffer> {
+        this.downloadCount += 1
         const object = this.objects.get(objectPath)
         if (object === undefined) {
             throw { code: 404 }
@@ -158,10 +249,41 @@ class MapObjectStore implements ObjectStore {
 async function request(
     objectStore: ObjectStore,
     path: string,
+    options: {
+        authenticator?: Authenticator
+        authFailureReporter?: AuthFailureReporter
+        headers?: Record<string, string>
+    } = {},
 ): Promise<Response> {
-    const server = createApp(objectStore).listen(0)
+    const server = createApp({
+        objectStore,
+        authenticator: options.authenticator ?? validAuthenticator,
+        authFailureReporter: options.authFailureReporter ?? unblockedReporter,
+    }).listen(0)
     servers.push(server)
     await new Promise<void>((resolve) => server.once("listening", resolve))
     const { port } = server.address() as AddressInfo
-    return fetch(`http://127.0.0.1:${port}${path}`)
+    return fetch(`http://127.0.0.1:${port}${path}`, {
+        headers: options.headers,
+    })
+}
+
+function rejectingAuthenticator(): Authenticator {
+    return {
+        async authenticate() {
+            throw new AuthenticationRejectedError("invalid authentication")
+        },
+    }
+}
+
+function reporter(
+    report: (ip: string) => Promise<AuthFailureReport>,
+): AuthFailureReporter {
+    return { report }
+}
+
+function unavailableReporter(): AuthFailureReporter {
+    return reporter(async () => {
+        throw new Error("unavailable")
+    })
 }

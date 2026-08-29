@@ -39,10 +39,19 @@ jobs:
               run: dotnet test --configuration Release apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop.Tests/Theorymancer.GuildWars2.Desktop.Tests.csproj
             - name: Publish single-file executable
               run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output artifacts/guild-wars-2-screen-collector apps/guild-wars-2/desktop/Theorymancer.GuildWars2.Desktop/Theorymancer.GuildWars2.Desktop.csproj
+            - name: Verify development configuration
+              run: |
+                  $settings = Get-Content artifacts/guild-wars-2-screen-collector/appsettings.json | ConvertFrom-Json
+                  if ($settings.mainApiUrl -notmatch 'theorymancer-development-api' -or
+                      $settings.websiteUrl -notmatch 'theorymancer-development-web' -or
+                      $settings.guildWars2ApiUrl -notmatch 'theorymancer-development-guild-wars-2-api' -or
+                      $settings.authAudience -notmatch ':development$') {
+                      throw 'The development desktop artifact contains mismatched environment configuration.'
+                  }
             - name: Write executable hash
               run: Get-FileHash artifacts/guild-wars-2-screen-collector/TheorymancerScreenCollector.exe -Algorithm SHA256 | Format-List | Out-File artifacts/guild-wars-2-screen-collector/SHA256.txt
             - uses: actions/upload-artifact@v4
               with:
-                  name: guild-wars-2-screen-collector-win-x64
+                  name: guild-wars-2-screen-collector-development-win-x64
                   path: artifacts/guild-wars-2-screen-collector
                   if-no-files-found: error

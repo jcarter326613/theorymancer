@@ -22,3 +22,13 @@ output "web_url" {
   description = "Development website URL."
   value       = module.web.uri
 }
+
+output "firestore_database_id" {
+  description = "Development named Firestore database ID."
+  value       = google_firestore_database.this.name
+}
+
+output "ip_hash_secret_id" {
+  description = "Secret Manager container that requires an out-of-band payload version."
+  value       = google_secret_manager_secret.ip_hash.secret_id
+}

@@ -24,7 +24,7 @@ jobs:
         runs-on: ubuntu-latest
         environment: ${{ inputs.environment || 'development' }}
         concurrency:
-            group: theorymancer-${{ inputs.environment || 'development' }}
+            group: theorymancer-infrastructure
             cancel-in-progress: false
         env:
             ENVIRONMENT: ${{ inputs.environment || 'development' }}
@@ -41,10 +41,13 @@ jobs:
             - name: Enable Corepack
               run: corepack enable
 
-            - name: Test Guild Wars 2 API
+            - name: Test and build APIs
               run: |
                   pnpm install --frozen-lockfile
+                  pnpm --filter @theorymancer/api test
+                  pnpm --filter @theorymancer/api build
                   pnpm --filter @theorymancer/guild-wars-2-api test
+                  pnpm --filter @theorymancer/guild-wars-2-api build
 
             - uses: google-github-actions/auth@v2
               with:
@@ -58,12 +61,12 @@ jobs:
 
             - name: Build and publish images
               env:
-                  IMAGE_TAG: ${{ github.sha }}
+                  IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}-${{ inputs.environment || 'development' }}
               run: |
                   WEB_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/web:${IMAGE_TAG}"
                   API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/api:${IMAGE_TAG}"
                   GUILD_WARS_2_API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/theorymancer/guild-wars-2-api:${IMAGE_TAG}"
-                  docker build --build-arg "VITE_API_URL=" -f apps/web/Dockerfile -t "$WEB_IMAGE" .
+                  docker build -f apps/web/Dockerfile -t "$WEB_IMAGE" .
                   docker build -f apps/api/Dockerfile -t "$API_IMAGE" .
                   docker build -f apps/guild-wars-2/api/Dockerfile -t "$GUILD_WARS_2_API_IMAGE" .
                   docker push "$WEB_IMAGE"
@@ -86,6 +89,9 @@ jobs:
                   terraform apply -input=false -auto-approve
                   -var="project_id=${GCP_PROJECT_ID}"
                   -var="region=${GCP_REGION}"
+                  -var="terraform_state_bucket=${TF_STATE_BUCKET}"
+                  -var="web_origin=${{ vars.WEB_ORIGIN }}"
+                  -var="ip_hash_secret_version=${{ vars.IP_HASH_SECRET_VERSION || '1' }}"
                   -var="web_image=${WEB_IMAGE}"
                   -var="api_image=${API_IMAGE}"
                   -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
@@ -97,5 +103,7 @@ jobs:
                   API_URL="$(terraform output -raw api_url)"
                   GUILD_WARS_2_API_URL="$(terraform output -raw guild_wars_2_api_url)"
                   curl --fail --retry 5 --retry-delay 3 "$WEB_URL"
+                  curl --fail --retry 5 --retry-delay 3 "$WEB_URL/config.js"
                   curl --fail --retry 5 --retry-delay 3 "$API_URL/health"
+                  curl --fail --retry 5 --retry-delay 3 "$API_URL/.well-known/jwks.json"
                   curl --fail --retry 5 --retry-delay 3 "$GUILD_WARS_2_API_URL/health"

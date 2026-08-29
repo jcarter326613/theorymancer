@@ -7,12 +7,19 @@
         "predev": "pnpm --filter @theorymancer/contracts build",
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
-        "start": "node dist/index.js"
+        "start": "node dist/index.js",
+        "test": "tsx --test src/app.test.ts src/security.test.ts"
     },
     "dependencies": {
+        "@google-cloud/firestore": "^7.11.0",
+        "@google-cloud/kms": "^5.3.0",
         "@theorymancer/contracts": "workspace:*",
         "cors": "^2.8.5",
-        "express": "^5.1.0"
+        "express": "^5.1.0",
+        "firebase-admin": "^13.4.0",
+        "google-auth-library": "^9.15.1",
+        "jose": "^6.0.0",
+        "zod": "^3.24.2"
     },
     "devDependencies": {
         "@types/cors": "^2.8.0",

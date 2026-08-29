@@ -5,31 +5,48 @@ using System.Text.Json.Serialization;
 
 namespace Theorymancer.GuildWars2.Desktop.SkillBar;
 
-public static class ReferenceIcons
+public sealed class ReferenceIcons
 {
     public const int NightfallSkillId = 29855;
-    private static readonly HttpClient HttpClient = new();
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly GuildWars2ApiConfiguration ApiConfiguration = GuildWars2ApiConfiguration.Load();
+    private readonly GuildWars2ApiClient _apiClient;
+    private readonly GuildWars2ApiConfiguration _apiConfiguration;
+    private readonly string _cacheDirectory;
+    private readonly string _manifestPath;
 
-    public static async Task<string> GetNightfallPathAsync(CancellationToken cancellationToken)
+    public ReferenceIcons(
+        GuildWars2ApiClient apiClient,
+        GuildWars2ApiConfiguration apiConfiguration,
+        string? cacheDirectory = null,
+        string? manifestPath = null)
     {
-        var manifest = LoadManifest();
-        var icon = manifest.Skills.Single(icon => icon.SkillId == NightfallSkillId);
-        var asset = manifest.Assets.Single(asset => asset.AssetId == icon.AssetId);
-        var directory = Path.Combine(
+        _apiClient = apiClient;
+        _apiConfiguration = apiConfiguration;
+        _cacheDirectory = cacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Theorymancer",
             "guild-wars-2",
             "icon-cache");
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, $"{asset.AssetId}.png");
+        _manifestPath = manifestPath ?? Path.Combine(
+            AppContext.BaseDirectory,
+            "assets",
+            "guild-wars-2",
+            "icons.manifest.json");
+    }
+
+    public async Task<string> GetNightfallPathAsync(CancellationToken cancellationToken)
+    {
+        var manifest = LoadManifest();
+        var icon = manifest.Skills.Single(icon => icon.SkillId == NightfallSkillId);
+        var asset = manifest.Assets.Single(asset => asset.AssetId == icon.AssetId);
+        Directory.CreateDirectory(_cacheDirectory);
+        var path = Path.Combine(_cacheDirectory, $"{asset.AssetId}.png");
         if (File.Exists(path))
         {
             return path;
         }
 
-        var bytes = await HttpClient.GetByteArrayAsync(ApiConfiguration.GetIconUri(asset.AssetId), cancellationToken);
+        var bytes = await _apiClient.GetByteArrayAsync(_apiConfiguration.GetIconUri(asset.AssetId), cancellationToken);
 
         var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
         await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken);
@@ -37,10 +54,9 @@ public static class ReferenceIcons
         return path;
     }
 
-    private static IconManifest LoadManifest()
+    private IconManifest LoadManifest()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "assets", "guild-wars-2", "icons.manifest.json");
-        var manifest = JsonSerializer.Deserialize<IconManifest>(File.ReadAllText(path), JsonOptions);
+        var manifest = JsonSerializer.Deserialize<IconManifest>(File.ReadAllText(_manifestPath), JsonOptions);
         return manifest is { Version: 2, Assets.Count: > 0, Skills.Count: > 0 }
             ? manifest
             : throw new InvalidOperationException("The packaged Guild Wars 2 icon manifest is missing or invalid.");

@@ -23,3 +23,25 @@ variable "guild_wars_2_api_image" {
   description = "Immutable container image for the Guild Wars 2 API."
   type        = string
 }
+
+variable "terraform_state_bucket" {
+  description = "GCS bucket containing the shared Terraform state."
+  type        = string
+}
+
+variable "firestore_location" {
+  description = "Firestore database location."
+  type        = string
+  default     = "us-east1"
+}
+
+variable "web_origin" {
+  description = "Browser origin allowed by the central API."
+  type        = string
+}
+
+variable "ip_hash_secret_version" {
+  description = "Pinned, out-of-band Secret Manager version containing the IP hash secret."
+  type        = string
+  default     = "1"
+}

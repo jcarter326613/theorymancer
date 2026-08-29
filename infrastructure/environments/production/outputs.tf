@@ -22,3 +22,13 @@ output "web_url" {
   description = "Production website URL before custom-domain configuration."
   value       = module.web.uri
 }
+
+output "firestore_database_id" {
+  description = "Production named Firestore database ID."
+  value       = google_firestore_database.this.name
+}
+
+output "ip_hash_secret_id" {
+  description = "Secret Manager container that requires an out-of-band payload version."
+  value       = google_secret_manager_secret.ip_hash.secret_id
+}

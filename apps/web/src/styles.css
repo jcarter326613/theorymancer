@@ -15,53 +15,419 @@ body {
     min-width: 320px;
     min-height: 100vh;
     background:
-        radial-gradient(circle at 78% 20%, #5a241c 0, transparent 32rem),
-        radial-gradient(circle at 12% 90%, #243f46 0, transparent 28rem),
+        radial-gradient(
+            circle at 82% 10%,
+            rgb(90 36 28 / 75%) 0,
+            transparent 31rem
+        ),
+        radial-gradient(
+            circle at 8% 94%,
+            rgb(36 63 70 / 78%) 0,
+            transparent 30rem
+        ),
         #13100f;
 }
 
-main {
-    display: grid;
-    align-content: center;
-    min-height: 100vh;
-    max-width: 58rem;
-    padding: 3rem clamp(1.5rem, 8vw, 7rem);
+button {
+    font: inherit;
 }
 
-.eyebrow {
-    margin: 0 0 1.5rem;
+button:focus-visible {
+    outline: 3px solid #f5efe4;
+    outline-offset: 3px;
+}
+
+.account-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.8fr);
+    gap: clamp(3rem, 8vw, 8rem);
+    align-items: center;
+    min-height: 100vh;
+    max-width: 90rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 7vw, 6rem);
+}
+
+.account-intro {
+    align-self: center;
+}
+
+.eyebrow,
+.section-label {
     color: #ecb45e;
     font-family: Arial, sans-serif;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 700;
     letter-spacing: 0.2em;
     text-transform: uppercase;
 }
 
+.eyebrow {
+    margin: 0 0 1.5rem;
+}
+
+.section-label {
+    margin: 0 0 1.25rem;
+}
+
+h1,
+h2,
+p {
+    overflow-wrap: break-word;
+}
+
 h1 {
-    max-width: 12ch;
+    max-width: 11ch;
     margin: 0;
-    font-size: clamp(3.4rem, 10vw, 7rem);
+    font-size: clamp(3.5rem, 8vw, 7.6rem);
     font-weight: 400;
     letter-spacing: -0.065em;
-    line-height: 0.9;
+    line-height: 0.88;
+}
+
+h2 {
+    margin: 0;
+    font-size: clamp(1.7rem, 3vw, 2.5rem);
+    font-weight: 400;
+    line-height: 1.05;
 }
 
 .summary {
-    max-width: 38rem;
-    margin: 2.5rem 0 0;
+    max-width: 36rem;
+    margin: 2rem 0 0;
     color: #d4c9ba;
     font-family: Arial, sans-serif;
-    font-size: clamp(1.05rem, 2vw, 1.35rem);
-    line-height: 1.55;
+    font-size: clamp(1.02rem, 2vw, 1.25rem);
+    line-height: 1.6;
 }
 
-.status {
+.edition {
     width: fit-content;
     margin: 2rem 0 0;
-    padding: 0.7rem 0.9rem;
+    padding: 0.68rem 0.85rem;
     border: 1px solid #6d5540;
     color: #ecb45e;
     font-family: Arial, sans-serif;
+    font-size: 0.82rem;
+}
+
+.account-panel {
+    width: 100%;
+    max-width: 31rem;
+    justify-self: end;
+    padding: 0 0 0 clamp(1.5rem, 4vw, 3rem);
+    border-left: 1px solid rgb(236 180 94 / 28%);
+}
+
+.panel-rule {
+    width: 4.5rem;
+    height: 0.25rem;
+    margin-bottom: 2.5rem;
+    background: #ecb45e;
+}
+
+.panel-copy {
+    margin: 1.2rem 0 1.75rem;
+    color: #bdb2a4;
+    font-family: Arial, sans-serif;
+    line-height: 1.55;
+}
+
+.primary-button {
+    display: inline-flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: 0.8rem 1.15rem;
+    border: 1px solid #ecb45e;
+    color: #171210;
+    background: #ecb45e;
+    font-family: Arial, sans-serif;
+    font-size: 0.94rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.primary-button:hover:not(:disabled) {
+    background: #f5cf91;
+}
+
+.primary-button:disabled,
+.text-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.google-mark {
+    display: grid;
+    place-items: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 50%;
+    color: #1f1a17;
+    background: #fff;
+    font-family: Arial, sans-serif;
+    font-size: 0.82rem;
+}
+
+.identity {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.identity img,
+.avatar-fallback {
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 50%;
+}
+
+.identity img {
+    object-fit: cover;
+}
+
+.avatar-fallback {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    color: #13100f;
+    background: #ecb45e;
+    font-size: 1.25rem;
+}
+
+.identity p {
+    margin: 0.35rem 0 0;
+    color: #a99e91;
+    font-family: Arial, sans-serif;
     font-size: 0.9rem;
+}
+
+.identity .account-id {
+    margin-top: 0.35rem;
+    color: #83796e;
+    font-family: Consolas, monospace;
+    font-size: 0.72rem;
+}
+
+.text-button {
+    margin-top: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid #806747;
+    color: #ecb45e;
+    background: transparent;
+    font-family: Arial, sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.grants {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgb(245 239 228 / 14%);
+}
+
+.grants-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.grants-heading span {
+    color: #83796e;
+    font-family: Arial, sans-serif;
+    font-size: 0.75rem;
+}
+
+.grants ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.grants li {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgb(245 239 228 / 10%);
+    font-size: 1.2rem;
+}
+
+.grants li span {
+    color: #8f806f;
+    font-family: Arial, sans-serif;
+    font-size: 0.7rem;
+}
+
+.notice,
+.error-message,
+.fine-print {
+    font-family: Arial, sans-serif;
+    line-height: 1.5;
+}
+
+.notice {
+    color: #bdb2a4;
+    font-size: 0.92rem;
+}
+
+.error-message {
+    margin: 1.5rem 0 0;
+    padding: 0.9rem 1rem;
+    border-left: 3px solid #e37a62;
+    color: #ffd4ca;
+    background: rgb(111 31 24 / 28%);
+    font-size: 0.9rem;
+}
+
+.authorize-page {
+    display: grid;
+    align-items: center;
+    min-height: 100vh;
+    padding: clamp(1.5rem, 6vw, 5rem);
+}
+
+.authorize-card {
+    width: min(100%, 47rem);
+    margin: 0 auto;
+    padding: clamp(2rem, 7vw, 5rem);
+    border: 1px solid rgb(236 180 94 / 27%);
+    background: rgb(19 16 15 / 77%);
+    box-shadow: 0 2rem 7rem rgb(0 0 0 / 32%);
+}
+
+.authorize-card .section-label {
+    margin-bottom: 1.5rem;
+}
+
+.authorize-card h1 {
+    max-width: 12ch;
+    font-size: clamp(2.7rem, 7vw, 5rem);
+    line-height: 0.94;
+}
+
+.authorize-card .summary {
+    margin-top: 1.75rem;
+    font-size: 1rem;
+}
+
+.security-note {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    align-items: center;
+    margin: 2rem 0;
+    padding: 1rem 0;
+    border-top: 1px solid rgb(245 239 228 / 13%);
+    border-bottom: 1px solid rgb(245 239 228 / 13%);
+}
+
+.security-note span {
+    padding: 0.45rem 0.55rem;
+    color: #9fd0cc;
+    background: #19302f;
+    font-family: Consolas, monospace;
+    font-size: 0.76rem;
+}
+
+.security-note p {
+    margin: 0;
+    color: #bdb2a4;
+    font-family: Arial, sans-serif;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.progress {
+    min-height: 3.25rem;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid #6d5540;
+    color: #ecb45e;
+}
+
+.fine-print {
+    margin: 1.5rem 0 0;
+    color: #83796e;
+    font-size: 0.76rem;
+}
+
+.grant-admin {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #6d5540;
+    font-family: Arial, sans-serif;
+}
+
+.grant-admin label {
+    color: #d4c9ba;
+    font-size: 0.85rem;
+}
+
+.grant-admin input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #6d5540;
+    border-radius: 0;
+    color: #f5efe4;
+    background: #1b1715;
+    font: inherit;
+}
+
+.grant-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.grant-actions button {
+    padding: 0.65rem 0.85rem;
+    border: 1px solid #8d6748;
+    color: #f5efe4;
+    background: transparent;
+    cursor: pointer;
+}
+
+.grant-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+@media (max-width: 760px) {
+    .account-page {
+        grid-template-columns: 1fr;
+        gap: 4rem;
+        align-content: center;
+        padding: 3rem 1.5rem;
+    }
+
+    .account-panel {
+        max-width: none;
+        padding: 2rem 0 0;
+        border-top: 1px solid rgb(236 180 94 / 28%);
+        border-left: 0;
+    }
+
+    .panel-rule {
+        margin-bottom: 2rem;
+    }
+
+    .authorize-card {
+        padding: 2rem 1.5rem;
+    }
+
+    .primary-button {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .primary-button {
+        transition: background-color 150ms ease;
+    }
 }

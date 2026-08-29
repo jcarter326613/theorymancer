@@ -28,3 +28,30 @@ variable "environment_variables" {
   type        = map(string)
   default     = {}
 }
+
+variable "secret_environment_variables" {
+  description = "Environment variables backed by pinned Secret Manager versions."
+  type = map(object({
+    secret  = string
+    version = string
+  }))
+  default = {}
+}
+
+variable "allow_unauthenticated" {
+  description = "Whether allUsers may invoke the service."
+  type        = bool
+  default     = false
+}
+
+variable "ingress" {
+  description = "Cloud Run ingress setting."
+  type        = string
+  default     = "INGRESS_TRAFFIC_ALL"
+}
+
+variable "max_instances" {
+  description = "Maximum number of serving instances."
+  type        = number
+  default     = 3
+}

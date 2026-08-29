@@ -1,10 +1,18 @@
 locals {
   required_services = toset([
     "artifactregistry.googleapis.com",
+    "apikeys.googleapis.com",
+    "cloudkms.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "firebase.googleapis.com",
+    "firebaserules.googleapis.com",
+    "firestore.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
+    "identitytoolkit.googleapis.com",
     "run.googleapis.com",
+    "secretmanager.googleapis.com",
+    "securetoken.googleapis.com",
     "serviceusage.googleapis.com",
     "storage.googleapis.com",
     "sts.googleapis.com",
@@ -12,9 +20,17 @@ locals {
 
   default_terraform_roles = toset([
     "roles/artifactregistry.admin",
+    "roles/cloudkms.admin",
+    "roles/datastore.owner",
+    "roles/firebase.admin",
+    "roles/firebaserules.admin",
     "roles/iam.serviceAccountAdmin",
     "roles/iam.serviceAccountUser",
+    "roles/identityplatform.admin",
+    "roles/resourcemanager.projectIamAdmin",
     "roles/run.admin",
+    "roles/secretmanager.admin",
+    "roles/serviceusage.serviceUsageAdmin",
     "roles/storage.admin",
   ])
 }
@@ -69,7 +85,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.actor"      = "assertion.actor"
     "attribute.repository" = "assertion.repository"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  attribute_condition = "assertion.repository == \"${var.github_repository}\" && assertion.ref == \"refs/heads/main\""
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"

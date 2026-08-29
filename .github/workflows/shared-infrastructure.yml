@@ -1,0 +1,49 @@
+name: Shared infrastructure
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+
+jobs:
+    apply:
+        name: Apply shared infrastructure
+        runs-on: ubuntu-latest
+        environment: production
+        concurrency:
+            group: theorymancer-infrastructure
+            cancel-in-progress: false
+        env:
+            GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+            GCP_REGION: ${{ vars.GCP_REGION }}
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - name: Plan shared infrastructure
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform plan -input=false -out=tfplan
+                  -var="project_id=${GCP_PROJECT_ID}"
+                  -var="region=${GCP_REGION}"
+                  -var="development_web_origin=${{ vars.DEVELOPMENT_WEB_ORIGIN }}"
+
+            - name: Apply shared infrastructure
+              working-directory: infrastructure/shared
+              run: terraform apply -input=false -auto-approve tfplan

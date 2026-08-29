@@ -10,14 +10,19 @@ public partial class CalibrationDialog : Window
 {
     private readonly SelectedGameWindow _gameWindow;
     private readonly IReadOnlyList<CalibratedRegion> _otherRegions;
+    private readonly ReferenceIcons _referenceIcons;
     private NormalizedCrop? _combatLogCrop;
     private NormalizedCrop? _skillBarCrop;
     private SkillBarLayout? _skillBarLayout;
     private CalibrationPreviewOverlay? _previewOverlay;
 
-    public CalibrationDialog(SelectedGameWindow gameWindow, CollectorSettings settings)
+    public CalibrationDialog(
+        SelectedGameWindow gameWindow,
+        CollectorSettings settings,
+        ReferenceIcons referenceIcons)
     {
         _gameWindow = gameWindow;
+        _referenceIcons = referenceIcons;
         _otherRegions = settings.Regions
             .Where(region => region.Id != CalibratedRegion.CombatLogId && region.Id != CalibratedRegion.SkillBarId)
             .ToList();
@@ -67,7 +72,7 @@ public partial class CalibrationDialog : Window
             var frame = await capture.CaptureAsync(CancellationToken.None);
             var words = await WindowsHudOcrEngine.CreateEnglish().RecognizeWordsAsync(frame, CancellationToken.None);
             var detection = SkillBarLayoutDetector.Detect(frame, words);
-            var nightfallIconPath = await ReferenceIcons.GetNightfallPathAsync(CancellationToken.None);
+            var nightfallIconPath = await _referenceIcons.GetNightfallPathAsync(CancellationToken.None);
             var nightfallMatch = IconTemplateMatcher.FindBestMatch(
                 frame,
                 nightfallIconPath,

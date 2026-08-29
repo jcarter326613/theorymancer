@@ -4,16 +4,21 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Theorymancer.GuildWars2.Desktop.Authentication;
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
+using Theorymancer.GuildWars2.Desktop.SkillBar;
 
 namespace Theorymancer.GuildWars2.Desktop;
 
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly CollectorSettingsStore _settingsStore = new();
+    private readonly DesktopAuthenticationService _authentication;
+    private readonly ReferenceIcons _referenceIcons;
+    private readonly CancellationToken _shutdownToken;
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
     private CombatLogCaptureSession? _captureSession;
@@ -21,12 +26,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _diagnosticsEnabled;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
+    private string _authenticationStatus = "Signed out";
 
-    public MainWindow()
+    public MainWindow(
+        DesktopAuthenticationService authentication,
+        ReferenceIcons referenceIcons,
+        CancellationToken shutdownToken)
     {
+        _authentication = authentication;
+        _referenceIcons = referenceIcons;
+        _shutdownToken = shutdownToken;
         InitializeComponent();
         DataContext = this;
         _settings = _settingsStore.Load();
+        _authentication.StateChanged += Authentication_StateChanged;
+        UpdateAuthenticationControls();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -45,6 +59,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => SetField(ref _captureStatus, value);
     }
 
+    public string AuthenticationStatus
+    {
+        get => _authenticationStatus;
+        private set => SetField(ref _authenticationStatus, value);
+    }
+
+    private async void SignIn_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _authentication.SignInAsync(_shutdownToken);
+        }
+        catch (OperationCanceledException) when (_shutdownToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowSetupError($"Sign-in failed: {exception.Message}");
+        }
+    }
+
+    private async void SignOut_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _authentication.SignOutAsync(_shutdownToken);
+        }
+        catch (Exception exception)
+        {
+            ShowSetupError($"Sign-out failed: {exception.Message}");
+        }
+    }
+
     private void SelectWindow_Click(object sender, RoutedEventArgs e)
     {
         var picker = new GameWindowPicker { Owner = this };
@@ -59,6 +106,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Calibrate_Click(object sender, RoutedEventArgs e)
     {
+        if (!_authentication.IsSignedIn)
+        {
+            ShowSetupError("Sign in to Theorymancer before calibrating and downloading Guild Wars 2 assets.");
+            return;
+        }
+
         if (_selectedWindow is null)
         {
             ShowSetupError("Select the Guild Wars 2 window before calibrating.");
@@ -71,7 +124,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var dialog = new CalibrationDialog(_selectedWindow, _settings) { Owner = this };
+        var dialog = new CalibrationDialog(_selectedWindow, _settings, _referenceIcons) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             _settings = dialog.Settings;
@@ -132,7 +185,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
+        _authentication.StateChanged -= Authentication_StateChanged;
         await StopCaptureAsync();
+    }
+
+    private void Authentication_StateChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(UpdateAuthenticationControls);
+            return;
+        }
+
+        UpdateAuthenticationControls();
+    }
+
+    private void UpdateAuthenticationControls()
+    {
+        AuthenticationStatus = _authentication.State switch
+        {
+            AuthenticationState.SigningIn => "Signing in...",
+            AuthenticationState.SignedIn => "Signed in",
+            _ => "Signed out",
+        };
+        SignInButton.IsEnabled = _authentication.State == AuthenticationState.SignedOut;
+        SignOutButton.IsEnabled = _authentication.State == AuthenticationState.SignedIn;
     }
 
     private async Task StopCaptureAsync()
