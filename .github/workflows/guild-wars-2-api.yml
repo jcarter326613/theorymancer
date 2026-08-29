@@ -1,0 +1,46 @@
+name: Guild Wars 2 API
+
+on:
+    pull_request:
+        paths:
+            - "apps/guild-wars-2/api/**"
+            - "apps/guild-wars-2/assets/**"
+            - ".github/workflows/guild-wars-2-api.yml"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "pnpm-workspace.yaml"
+    push:
+        paths:
+            - "apps/guild-wars-2/api/**"
+            - "apps/guild-wars-2/assets/**"
+            - ".github/workflows/guild-wars-2-api.yml"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "pnpm-workspace.yaml"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Test Guild Wars 2 API
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - name: Enable Corepack
+              run: corepack enable
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Test API
+              run: pnpm --filter @theorymancer/guild-wars-2-api test
+
+            - name: Build API
+              run: pnpm --filter @theorymancer/guild-wars-2-api build

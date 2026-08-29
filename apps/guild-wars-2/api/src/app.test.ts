@@ -1,24 +1,44 @@
 import { afterEach, test } from "node:test"
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
 import type { AddressInfo } from "node:net"
 import type { Server } from "node:http"
 
-import { createApp } from "./app.js"
+import { createApp, parseManifest } from "./app.js"
 import type { ObjectStore } from "./app.js"
 
-const iconHash =
-    "21d0d01d269b0f0a1e708a301e8e08e70b717f05c1721dd29b9a31415acac581"
+const iconAssetId = "a784986f-696d-4c63-8f46-4cc53efc9b47"
 const manifestPath = "guild-wars-2/icons.manifest.json"
-const iconPath = `guild-wars-2/icons/${iconHash}.png`
+const iconPath = `guild-wars-2/icons/${iconAssetId}.png`
 const manifest = JSON.stringify({
-    version: 1,
-    icons: [
+    version: 2,
+    assets: [
+        {
+            asset_id: iconAssetId,
+            source_url: "https://render.guildwars2.com/nightfall.png",
+            object_path: iconPath,
+        },
+    ],
+    skills: [
         {
             skill_id: 29855,
             name: "Nightfall",
-            source_url: "https://render.guildwars2.com/nightfall.png",
-            sha256: iconHash,
-            object_path: iconPath,
+            type: "Weapon",
+            professions: ["Necromancer"],
+            weapon_type: "Greatsword",
+            slot: "Weapon_4",
+            specialization_ids: [34],
+            categories: [],
+            attunement: null,
+            icon_asset_id: iconAssetId,
+        },
+    ],
+    effects: [
+        {
+            name: "Blinded",
+            fact_type: "Buff",
+            description: "Next outgoing attack misses; stacks duration.",
+            icon_asset_id: iconAssetId,
         },
     ],
 })
@@ -41,6 +61,20 @@ void test("returns the validated manifest", async () => {
     assert.deepEqual(await response.json(), JSON.parse(manifest))
 })
 
+void test("validates the source icon manifest", async () => {
+    const sourceManifest = await readFile(
+        new URL("../../assets/icons.manifest.json", import.meta.url),
+        "utf8",
+    )
+    assert.doesNotThrow(() => parseManifest(sourceManifest))
+    const response = await request(
+        new MapObjectStore(new Map([[manifestPath, sourceManifest]])),
+        "/icons/manifest",
+    )
+
+    assert.equal(response.status, 200)
+})
+
 void test("returns only manifest-listed icon objects", async () => {
     const response = await request(
         new MapObjectStore(
@@ -49,7 +83,7 @@ void test("returns only manifest-listed icon objects", async () => {
                 [iconPath, "png-bytes"],
             ]),
         ),
-        `/icons/${iconHash}.png`,
+        `/icons/${iconAssetId}.png`,
     )
 
     assert.equal(response.status, 200)
@@ -61,11 +95,16 @@ void test("returns only manifest-listed icon objects", async () => {
     assert.equal(await response.text(), "png-bytes")
 })
 
-void test("rejects unknown and malformed icon hashes", async () => {
+void test("rejects unknown and malformed icon asset IDs", async () => {
     const objectStore = new MapObjectStore(new Map([[manifestPath, manifest]]))
 
     assert.equal(
-        (await request(objectStore, `/icons/${"a".repeat(64)}.png`)).status,
+        (
+            await request(
+                objectStore,
+                "/icons/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.png",
+            )
+        ).status,
         404,
     )
     assert.equal(
@@ -77,7 +116,7 @@ void test("rejects unknown and malformed icon hashes", async () => {
 void test("returns not found when a manifest-listed object is absent", async () => {
     const response = await request(
         new MapObjectStore(new Map([[manifestPath, manifest]])),
-        `/icons/${iconHash}.png`,
+        `/icons/${iconAssetId}.png`,
     )
 
     assert.equal(response.status, 404)
@@ -85,13 +124,15 @@ void test("returns not found when a manifest-listed object is absent", async () 
 
 void test("does not serve an invalid manifest", async () => {
     const invalidManifest = JSON.stringify({
-        version: 1,
-        icons: [
+        version: 2,
+        assets: [
             {
-                ...JSON.parse(manifest).icons[0],
+                ...JSON.parse(manifest).assets[0],
                 object_path: "outside-the-game-namespace.png",
             },
         ],
+        skills: JSON.parse(manifest).skills,
+        effects: JSON.parse(manifest).effects,
     })
     const response = await request(
         new MapObjectStore(new Map([[manifestPath, invalidManifest]])),

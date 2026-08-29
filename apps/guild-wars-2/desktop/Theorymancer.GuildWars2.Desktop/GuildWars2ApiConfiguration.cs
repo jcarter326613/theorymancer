@@ -46,7 +46,7 @@ public sealed class GuildWars2ApiConfiguration
         return new GuildWars2ApiConfiguration(new Uri($"{baseUri.AbsoluteUri.TrimEnd('/')}/"));
     }
 
-    public Uri GetIconUri(string sha256) => new(BaseUri, $"icons/{sha256}.png");
+    public Uri GetIconUri(string assetId) => new(BaseUri, $"icons/{assetId}.png");
 
     private sealed record Settings(string? GuildWars2ApiUrl);
 }

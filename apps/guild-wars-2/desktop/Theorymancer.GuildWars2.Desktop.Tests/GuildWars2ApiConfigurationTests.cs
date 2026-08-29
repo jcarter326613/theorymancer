@@ -18,8 +18,8 @@ public sealed class GuildWars2ApiConfigurationTests
             var configuration = GuildWars2ApiConfiguration.Load(directory);
 
             Assert.Equal(
-                "https://guild-wars-2-api.example.test/icons/abc123.png",
-                configuration.GetIconUri("abc123").AbsoluteUri);
+                "https://guild-wars-2-api.example.test/icons/a784986f-696d-4c63-8f46-4cc53efc9b47.png",
+                configuration.GetIconUri("a784986f-696d-4c63-8f46-4cc53efc9b47").AbsoluteUri);
         }
         finally
         {

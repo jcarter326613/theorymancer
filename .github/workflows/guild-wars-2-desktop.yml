@@ -4,12 +4,14 @@ on:
     pull_request:
         paths:
             - "apps/guild-wars-2/desktop/**"
+            - "apps/guild-wars-2/assets/**"
             - "apps/guild-wars-2/README.md"
             - ".github/workflows/guild-wars-2-desktop.yml"
             - "global.json"
     push:
         paths:
             - "apps/guild-wars-2/desktop/**"
+            - "apps/guild-wars-2/assets/**"
             - "apps/guild-wars-2/README.md"
             - ".github/workflows/guild-wars-2-desktop.yml"
             - "global.json"

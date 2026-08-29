@@ -34,10 +34,14 @@ started by double-clicking it.
 
 ## Icon Assets
 
-`assets/icons.manifest.json` is the versioned source of truth for immutable GW2
-icon assets. It records the public canonical source URL, SHA-256, and
-content-addressed Cloud Storage object path for each icon. The PNG corpus is not
-committed to Git or Git LFS.
+`assets/icons.manifest.json` is the versioned source of truth for GW2 icon
+assets. It records UUID-addressed Cloud Storage objects, skill context including
+profession and weapon, and boon, condition, and effect icons. The PNG corpus is
+not committed to Git or Git LFS. Refresh the metadata-only manifest with:
+
+```powershell
+pwsh apps/guild-wars-2/assets/update-icons-manifest.ps1
+```
 
 After the applicable Terraform environment has created its game-assets bucket,
 publish the manifest locally with authenticated `gcloud`:
@@ -83,7 +87,6 @@ directory. That directory also contains `activity_log.jsonl`, which records
 visible activity entries and the correlated matcher result for each processed OCR
 frame.
 Diagnostic previews are not saved.
-
 
 Game analysis workloads remain independent of the public website and API and
 may use Python or another runtime when their requirements justify it.

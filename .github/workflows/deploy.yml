@@ -34,6 +34,18 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - name: Enable Corepack
+              run: corepack enable
+
+            - name: Test Guild Wars 2 API
+              run: |
+                  pnpm install --frozen-lockfile
+                  pnpm --filter @theorymancer/guild-wars-2-api test
+
             - uses: google-github-actions/auth@v2
               with:
                   workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
