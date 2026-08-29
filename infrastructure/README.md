@@ -8,8 +8,9 @@ resources remain isolated by environment:
 - `environments/production` deploys the production environment.
 - `modules` contains reusable environment resources.
 
-The initial infrastructure provides Cloud Run services, Cloud Storage upload
-buckets, and Artifact Registry. It deliberately does not provision a database.
+The initial infrastructure provides Cloud Run services, Cloud Storage upload and
+immutable game-assets buckets, and Artifact Registry. It deliberately does not
+provision a database.
 
 ## Prerequisites
 

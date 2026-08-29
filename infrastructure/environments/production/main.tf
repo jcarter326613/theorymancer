@@ -1,6 +1,7 @@
 locals {
-  environment         = "production"
-  uploads_bucket_name = "${var.project_id}-theorymancer-production-uploads"
+  environment             = "production"
+  uploads_bucket_name     = "${var.project_id}-theorymancer-production-uploads"
+  game_assets_bucket_name = "${var.project_id}-theorymancer-production-game-assets"
 }
 
 resource "google_service_account" "runtime" {
@@ -17,6 +18,21 @@ resource "google_storage_bucket" "uploads" {
   labels = {
     environment = local.environment
     application = "theorymancer"
+  }
+}
+
+resource "google_storage_bucket" "game_assets" {
+  name                        = local.game_assets_bucket_name
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = false
+
+  labels = {
+    environment = local.environment
+    application = "theorymancer"
+    component   = "game-assets"
   }
 }
 

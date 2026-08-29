@@ -42,11 +42,11 @@ GCP project while remaining logically isolated:
   are stored in the repository.
 
 Cloud Run hosts the web and API services and scales to zero when unused. Cloud
-Storage holds uploaded combat logs and generated artifacts. Artifact Registry
-holds deployable container images. Development uses the generated Cloud Run
-URLs and therefore requires no second domain. Production is reserved for
-`theorymancer.com`; DNS and custom-domain configuration occur after ownership
-and verification are available.
+Storage holds uploaded combat logs, generated artifacts, and immutable
+game-specific asset caches. Artifact Registry holds deployable container images.
+Development uses the generated Cloud Run URLs and therefore requires no second
+domain. Production is reserved for `theorymancer.com`; DNS and custom-domain
+configuration occur after ownership and verification are available.
 
 The shared development environment is the target for deployed integration
 checks. We will not maintain permanent preview environments for each pull

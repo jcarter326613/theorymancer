@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "icons": [
+    {
+      "skill_id": 29855,
+      "name": "Nightfall",
+      "source_url": "https://render.guildwars2.com/file/586F0469807BB7CB7942F098CC24331D0FF3CA4E/1012926.png",
+      "sha256": "21d0d01d269b0f0a1e708a301e8e08e70b717f05c1721dd29b9a31415acac581",
+      "object_path": "guild-wars-2/icons/21d0d01d269b0f0a1e708a301e8e08e70b717f05c1721dd29b9a31415acac581.png"
+    }
+  ]
+}
