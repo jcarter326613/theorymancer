@@ -11,6 +11,7 @@ public static class ReferenceIcons
     public const int NightfallSkillId = 29855;
     private static readonly HttpClient HttpClient = new();
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly GuildWars2ApiConfiguration ApiConfiguration = GuildWars2ApiConfiguration.Load();
 
     public static async Task<string> GetNightfallPathAsync(CancellationToken cancellationToken)
     {
@@ -27,7 +28,7 @@ public static class ReferenceIcons
             return path;
         }
 
-        var bytes = await HttpClient.GetByteArrayAsync(icon.SourceUrl, cancellationToken);
+        var bytes = await HttpClient.GetByteArrayAsync(ApiConfiguration.GetIconUri(icon.Sha256), cancellationToken);
         if (!HashMatches(bytes, icon.Sha256))
         {
             throw new InvalidOperationException($"The downloaded {icon.Name} icon does not match the manifest hash.");
@@ -56,6 +57,5 @@ public static class ReferenceIcons
     private sealed record ManifestIcon(
         [property: JsonPropertyName("skill_id")] int SkillId,
         [property: JsonPropertyName("name")] string Name,
-        [property: JsonPropertyName("source_url")] string SourceUrl,
         [property: JsonPropertyName("sha256")] string Sha256);
 }

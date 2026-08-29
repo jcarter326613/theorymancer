@@ -48,9 +48,12 @@ pwsh apps/guild-wars-2/assets/sync-icons.ps1 -Bucket YOUR_GAME_ASSETS_BUCKET
 
 The **Sync Guild Wars 2 Assets** GitHub Actions workflow provides the same
 operation through the existing Workload Identity Federation deployment identity.
-The desktop collector downloads a missing manifest icon from its canonical source,
-verifies its hash, and retains it in a local cache. A later API endpoint will
-serve the same verified assets from Cloud Storage instead.
+The desktop collector downloads a missing manifest icon from the Guild Wars 2
+API specified in its packaged `appsettings.json`, verifies its hash, and retains
+it in a local cache. The checked-in default at
+`desktop/Theorymancer.GuildWars2.Desktop/appsettings.json` targets the deployed
+development API; release builds should point this setting at the production API
+when it is available.
 
 ## OCR Row Model
 
