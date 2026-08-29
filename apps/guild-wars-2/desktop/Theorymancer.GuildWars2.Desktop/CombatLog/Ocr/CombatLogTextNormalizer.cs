@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Theorymancer.GuildWars2.Desktop.Ocr;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
 public static partial class CombatLogTextNormalizer
 {

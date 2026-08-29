@@ -1,10 +1,10 @@
 using System.Text.Json;
-using Theorymancer.GuildWars2.Desktop.Ocr;
-using Theorymancer.GuildWars2.Desktop.Sessions;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
 
-public sealed class ActivityLogDebugWriterTests
+public sealed class CombatLogActivityLogDebugWriterTests
 {
     [Fact]
     public async Task WritesVisibleActivityAndCorrelatedFrameMatchRecords()
@@ -12,7 +12,7 @@ public sealed class ActivityLogDebugWriterTests
         var sessionDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         try
         {
-            await using (var writer = new ActivityLogDebugWriter(sessionDirectory))
+            await using (var writer = new CombatLogActivityLogDebugWriter(sessionDirectory))
             {
                 writer.WriteActivity(
                     new DateTimeOffset(2026, 8, 27, 14, 0, 0, TimeSpan.Zero),

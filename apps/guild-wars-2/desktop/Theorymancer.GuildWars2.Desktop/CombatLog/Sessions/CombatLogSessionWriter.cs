@@ -1,11 +1,11 @@
 using System.Text.Json;
 using System.Diagnostics;
 using System.IO;
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
-namespace Theorymancer.GuildWars2.Desktop.Sessions;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
-public sealed class SessionWriter : IAsyncDisposable
+public sealed class CombatLogSessionWriter : IAsyncDisposable
 {
     private const long MaximumSessionBytes = 512L * 1024 * 1024;
 
@@ -16,7 +16,7 @@ public sealed class SessionWriter : IAsyncDisposable
     private long _sequence;
     private bool _isCapped;
 
-    private SessionWriter(Guid sessionId, string path, FileStream stream)
+    private CombatLogSessionWriter(Guid sessionId, string path, FileStream stream)
     {
         SessionId = sessionId;
         Path = path;
@@ -28,7 +28,7 @@ public sealed class SessionWriter : IAsyncDisposable
 
     public string Path { get; }
 
-    public static async Task<SessionWriter> CreateAsync()
+    public static async Task<CombatLogSessionWriter> CreateAsync()
     {
         var sessionId = Guid.NewGuid();
         var directory = System.IO.Path.Combine(
@@ -39,7 +39,7 @@ public sealed class SessionWriter : IAsyncDisposable
         Directory.CreateDirectory(directory);
         var path = System.IO.Path.Combine(directory, $"{DateTimeOffset.UtcNow:yyyyMMddTHHmmssZ}-{sessionId:N}.jsonl");
         var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-        var writer = new SessionWriter(sessionId, path, stream);
+        var writer = new CombatLogSessionWriter(sessionId, path, stream);
         await writer.WriteAsync("session_started", new
         {
             qpc_frequency = Stopwatch.Frequency,
@@ -48,7 +48,7 @@ public sealed class SessionWriter : IAsyncDisposable
         return writer;
     }
 
-    public Task WriteRecognizedLineAsync(RecognizedCombatLogLine line) =>
+    public Task WriteCombatLogLineAsync(RecognizedCombatLogLine line) =>
         WriteAsync("combat_log_line", new
         {
             first_seen_qpc = line.FirstSeenQpc,

@@ -1,4 +1,4 @@
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
 

@@ -6,8 +6,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
-using Theorymancer.GuildWars2.Desktop.Ocr;
-using Theorymancer.GuildWars2.Desktop.Sessions;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
 namespace Theorymancer.GuildWars2.Desktop;
 
@@ -16,11 +16,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CollectorSettingsStore _settingsStore = new();
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
-    private CalibrationOverlay? _calibrationOverlay;
-    private CaptureSession? _captureSession;
-    private ActivityLogDebugWriter? _activityLogDebugWriter;
+    private CombatLogCaptureSession? _captureSession;
+    private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
-    private string _setupStatus = "Select the Guild Wars 2 window, then calibrate its combat-log crop.";
+    private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
 
     public MainWindow()
@@ -55,58 +54,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _selectedWindow = picker.SelectedWindow;
-        SetupStatus = $"Selected {_selectedWindow.Title}. Calibrate the visible combat-log crop.";
+        SetupStatus = $"Selected {_selectedWindow.Title}. Calibrate the required interface regions.";
     }
 
     private void Calibrate_Click(object sender, RoutedEventArgs e)
     {
-        if (_calibrationOverlay is not null)
-        {
-            SetupStatus = "Calibration is already active on the selected game window.";
-            return;
-        }
-
         if (_selectedWindow is null)
         {
             ShowSetupError("Select the Guild Wars 2 window before calibrating.");
             return;
         }
 
-        if (!_selectedWindow.TryGetClientBounds(out var clientBounds))
+        if (!_selectedWindow.TryGetClientBounds(out _))
         {
             ShowSetupError("Guild Wars 2 is no longer available. Select its window again.");
             return;
         }
 
-        var overlay = new CalibrationOverlay(clientBounds, _settings.Regions);
-        _calibrationOverlay = overlay;
-        overlay.RegionCountChanged += UpdateCalibrationControls;
-        overlay.Confirmed += regions =>
+        var dialog = new CalibrationDialog(_selectedWindow, _settings) { Owner = this };
+        if (dialog.ShowDialog() == true)
         {
-            _settings = _settings with { Regions = regions };
+            _settings = dialog.Settings;
             _settingsStore.Save(_settings);
             SetupStatus = "Calibration saved. Start capture when the dedicated combat tab is visible.";
-            EndCalibration();
-        };
-        overlay.Cancelled += () =>
-        {
-            SetupStatus = "Calibration canceled.";
-            EndCalibration();
-        };
-        UpdateCalibrationControls(overlay.RegionCount);
-        overlay.Show();
-        SetupStatus = "Calibration is active. Draw or move regions on the Guild Wars 2 window, then confirm here.";
+        }
     }
-
-    private void ConfirmCalibration_Click(object sender, RoutedEventArgs e) => _calibrationOverlay?.Confirm();
-
-    private void CancelCalibration_Click(object sender, RoutedEventArgs e) => _calibrationOverlay?.Cancel();
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedWindow is null || _settings.CombatLogCrop is null)
+        if (_selectedWindow is null || _settings.CombatLogCrop is null || _settings.SkillBarCrop is null)
         {
-            ShowSetupError("Select the GW2 window and calibrate the combat-log crop before recording.");
+            ShowSetupError("Select the GW2 window and calibrate both required interface regions before recording.");
             return;
         }
 
@@ -120,10 +98,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            _captureSession = await CaptureSession.StartAsync(_selectedWindow, _settings, _diagnosticsEnabled);
-            _captureSession.StatusChanged += CaptureSession_StatusChanged;
-            _captureSession.LineRecognized += CaptureSession_LineRecognized;
-            _captureSession.DiagnosticsUpdated += CaptureSession_DiagnosticsUpdated;
+            _captureSession = await CombatLogCaptureSession.StartAsync(_selectedWindow, _settings, _diagnosticsEnabled);
+            _captureSession.StatusChanged += CombatLogCaptureSession_StatusChanged;
+            _captureSession.LineRecognized += CombatLogCaptureSession_LineRecognized;
+            _captureSession.DiagnosticsUpdated += CombatLogCaptureSession_DiagnosticsUpdated;
             if (_diagnosticsEnabled)
             {
                 _activityLogDebugWriter = _captureSession.DebugActivityWriter;
@@ -151,23 +129,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
-        _calibrationOverlay?.Cancel();
         await StopCaptureAsync();
-    }
-
-    private void UpdateCalibrationControls(int regionCount)
-    {
-        CalibrationControls.Visibility = Visibility.Visible;
-        CalibrationStatusText.Text = regionCount == 0
-            ? "Draw the combat-log region on the game window."
-            : $"{regionCount} region(s) ready to confirm.";
-        ConfirmCalibrationButton.IsEnabled = regionCount > 0;
-    }
-
-    private void EndCalibration()
-    {
-        _calibrationOverlay = null;
-        CalibrationControls.Visibility = Visibility.Collapsed;
     }
 
     private async Task StopCaptureAsync()
@@ -194,7 +156,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void CaptureSession_StatusChanged(string message)
+    private void CombatLogCaptureSession_StatusChanged(string message)
     {
         Dispatcher.BeginInvoke(() =>
         {
@@ -203,12 +165,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         });
     }
 
-    private void CaptureSession_LineRecognized(RecognizedCombatLogLine line)
+    private void CombatLogCaptureSession_LineRecognized(RecognizedCombatLogLine line)
     {
         Dispatcher.BeginInvoke(() => AddActivity(line.Text, "matched_line", line));
     }
 
-    private void CaptureSession_DiagnosticsUpdated(CaptureDiagnostics diagnostics)
+    private void CombatLogCaptureSession_DiagnosticsUpdated(CombatLogCaptureDiagnostics diagnostics)
     {
         Dispatcher.BeginInvoke(() =>
         {
@@ -235,9 +197,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void RunDiagnosticOcr_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedWindow is null || _settings.CombatLogCrop is null)
+        if (_selectedWindow is null || _settings.CombatLogCrop is null || _settings.SkillBarCrop is null)
         {
-            ShowSetupError("Select the Guild Wars 2 window and calibrate the combat-log crop before running diagnostic OCR.");
+            ShowSetupError("Select the Guild Wars 2 window and calibrate both required interface regions before running diagnostic OCR.");
             return;
         }
 
@@ -315,7 +277,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ActivityList.ScrollIntoView(ActivityLog[^1]);
     }
 
-    private static string FormatStatistics(CaptureStatistics statistics) =>
+    private static string FormatStatistics(CombatLogCaptureStatistics statistics) =>
         $"Frames {statistics.FramesCaptured}; OCR queued {statistics.OcrFramesQueued}; " +
         $"recognized {statistics.RecognizedLines}; OCR empty {statistics.EmptyOcrRows}; " +
         $"dropped {statistics.DroppedOcrRows}.";

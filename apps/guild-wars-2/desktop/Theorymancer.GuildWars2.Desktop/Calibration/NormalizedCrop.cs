@@ -8,7 +8,7 @@ public sealed record NormalizedCrop(double X, double Y, double Width, double Hei
     {
         if (!clientBounds.Contains(crop))
         {
-            throw new ArgumentException("The combat-log crop must be inside the game window.", nameof(crop));
+            throw new ArgumentException("The calibrated region must be inside the game window.", nameof(crop));
         }
 
         return new NormalizedCrop(
@@ -27,7 +27,7 @@ public sealed record NormalizedCrop(double X, double Y, double Width, double Hei
         var crop = new ScreenBounds(x, y, width, height);
         if (!clientBounds.Contains(crop))
         {
-            throw new InvalidOperationException("The saved combat-log crop no longer fits in the game window.");
+            throw new InvalidOperationException("The saved calibrated region no longer fits in the game window.");
         }
 
         return crop;

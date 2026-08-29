@@ -5,8 +5,10 @@ ingestion, mechanics models, and deterministic performance analysis.
 
 `desktop/` is a self-contained C# WPF companion application for capturing the
 visible, calibrated combat-log panel and recognizing changed rows locally. It
-never loads into the game client, accesses game memory, or intercepts network
-traffic. It must be run with Guild Wars 2 visible and unobscured.
+requires calibration of both the combat log and skill bar, which is retained
+across sessions; skill-bar sampling is not implemented yet. It never loads into
+the game client, accesses game memory, or intercepts network traffic. It must
+be run with Guild Wars 2 visible and unobscured.
 
 The collector targets Windows 10 version 2004 or later on x64 hardware. It
 uses Windows' English OCR language pack; install that pack through Windows
@@ -51,9 +53,10 @@ written locally as JSONL under
 **Diagnostics** in the collector to inspect live capture and OCR counters plus
 an in-memory preview of the calibrated crop. While diagnostics is enabled, the
 collector also writes one JSON Lines raw-OCR file per processed frame under
-`debug-ocr-frames/<capture-start-timestamp>/` relative to its working directory.
-That directory also contains `activity_log.jsonl`, which records visible activity
-entries and the correlated matcher result for each processed OCR frame.
+`debug-combat-log-ocr-frames/<capture-start-timestamp>/` relative to its working
+directory. That directory also contains `activity_log.jsonl`, which records
+visible activity entries and the correlated matcher result for each processed OCR
+frame.
 Diagnostic previews are not saved.
 
 Game analysis workloads remain independent of the public website and API and

@@ -1,9 +1,9 @@
 using Theorymancer.GuildWars2.Desktop.Capture;
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
 
-public sealed class OcrWorkerTests
+public sealed class CombatLogOcrWorkerTests
 {
     [Fact]
     public async Task ProcessQueueAsync_CountsRecognizedAndEmptyCropResults()

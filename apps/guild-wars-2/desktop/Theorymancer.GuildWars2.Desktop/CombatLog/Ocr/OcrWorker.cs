@@ -1,7 +1,7 @@
 using System.Threading.Channels;
 using Theorymancer.GuildWars2.Desktop.Capture;
 
-namespace Theorymancer.GuildWars2.Desktop.Ocr;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
 public sealed class OcrWorker : IAsyncDisposable
 {

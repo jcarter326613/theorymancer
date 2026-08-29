@@ -4,7 +4,7 @@ using Windows.Media.Ocr;
 using Windows.Security.Cryptography;
 using Theorymancer.GuildWars2.Desktop.Capture;
 
-namespace Theorymancer.GuildWars2.Desktop.Ocr;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
 public sealed class WindowsCombatLogOcrEngine : ICombatLogOcrEngine
 {

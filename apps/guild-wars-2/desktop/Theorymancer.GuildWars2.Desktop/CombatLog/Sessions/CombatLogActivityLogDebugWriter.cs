@@ -1,11 +1,11 @@
 using System.IO;
 using System.Text.Json;
 using System.Threading.Channels;
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
-namespace Theorymancer.GuildWars2.Desktop.Sessions;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
-public sealed class ActivityLogDebugWriter : IAsyncDisposable
+public sealed class CombatLogActivityLogDebugWriter : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -16,7 +16,7 @@ public sealed class ActivityLogDebugWriter : IAsyncDisposable
     private long _sequence;
     private bool _disposed;
 
-    public ActivityLogDebugWriter(string sessionDirectory)
+    public CombatLogActivityLogDebugWriter(string sessionDirectory)
     {
         _path = Path.Combine(sessionDirectory, "activity_log.jsonl");
     }

@@ -10,6 +10,10 @@ public sealed record CollectorSettings(IReadOnlyList<CalibratedRegion> Regions)
     public NormalizedCrop? CombatLogCrop => Regions
         .FirstOrDefault(region => region.Id == CalibratedRegion.CombatLogId)
         ?.Crop;
+
+    public NormalizedCrop? SkillBarCrop => Regions
+        .FirstOrDefault(region => region.Id == CalibratedRegion.SkillBarId)
+        ?.Crop;
 }
 
 public sealed class CollectorSettingsStore

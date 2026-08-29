@@ -21,7 +21,7 @@
     <StackPanel Grid.Row="0">
       <TextBlock FontSize="22" FontWeight="SemiBold" Text="GW2 combat-log collector" />
       <TextBlock Margin="0,6,0,0" Foreground="DimGray" TextWrapping="Wrap">
-        Captures only the calibrated, visible combat-log region. Keep Guild Wars 2 visible and unobscured while recording.
+        Captures the visible combat-log region. Calibrate both the combat log and skill bar before recording.
       </TextBlock>
     </StackPanel>
 
@@ -34,15 +34,9 @@
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <Button Grid.Column="0" Padding="12,6" Click="SelectWindow_Click" Content="Select GW2 window" />
-      <Button Grid.Column="2" Padding="12,6" Click="Calibrate_Click" Content="Calibrate combat log" />
+      <Button Grid.Column="2" Padding="12,6" Click="Calibrate_Click" Content="Calibrate interface" />
       <TextBlock Grid.Column="4" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
     </Grid>
-
-    <StackPanel x:Name="CalibrationControls" Grid.Row="3" Margin="0,8,0,0" Orientation="Horizontal" Visibility="Collapsed">
-      <TextBlock x:Name="CalibrationStatusText" VerticalAlignment="Center" Foreground="DimGray" />
-      <Button x:Name="ConfirmCalibrationButton" Margin="12,0,0,0" Padding="12,6" Click="ConfirmCalibration_Click" Content="Confirm calibration" IsEnabled="False" />
-      <Button Margin="8,0,0,0" Padding="12,6" Click="CancelCalibration_Click" Content="Cancel calibration" />
-    </StackPanel>
 
     <Grid Grid.Row="4">
       <Grid.ColumnDefinitions>
@@ -55,14 +49,14 @@
       <Border x:Name="DiagnosticsPanel" Grid.Column="2" Padding="12" BorderBrush="Gainsboro" BorderThickness="1" Visibility="Collapsed">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
-            <TextBlock FontWeight="SemiBold" Text="Capture diagnostics" />
+            <TextBlock FontWeight="SemiBold" Text="Combat-log capture diagnostics" />
             <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
             <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
             <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Original crop" />
             <Border BorderBrush="Gainsboro" BorderThickness="1">
               <Image x:Name="OriginalDiagnosticPreview" Stretch="Uniform" />
             </Border>
-            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="OCR input" />
+            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Combat-log OCR input" />
             <Border BorderBrush="Gainsboro" BorderThickness="1">
               <Image x:Name="ProcessedDiagnosticPreview" Stretch="Uniform" />
             </Border>

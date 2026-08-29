@@ -40,6 +40,43 @@ public sealed class CalibrationTests
     }
 
     [Fact]
+    public void CollectorSettings_UsesTheNamedSkillBarRegion()
+    {
+        var skillBarCrop = new NormalizedCrop(0.2, 0.7, 0.6, 0.2);
+        var settings = new CollectorSettings(
+            [
+                new CalibratedRegion("interface-map", "Map", new NormalizedCrop(0, 0, 0.2, 0.2)),
+                new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", skillBarCrop),
+                new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", new NormalizedCrop(0.1, 0.2, 0.3, 0.4)),
+            ]);
+
+        Assert.Equal(skillBarCrop, settings.SkillBarCrop);
+    }
+
+    [Fact]
+    public void CollectorSettingsStore_PersistsBothRequiredRegions()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");
+        try
+        {
+            var expected = new CollectorSettings(
+                [
+                    new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", new NormalizedCrop(0.1, 0.2, 0.3, 0.4)),
+                    new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", new NormalizedCrop(0.2, 0.7, 0.6, 0.2)),
+                ]);
+            var store = new CollectorSettingsStore(path);
+
+            store.Save(expected);
+
+            Assert.Equal(expected.Regions, store.Load().Regions);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void CollectorSettingsStore_MigratesTheLegacyCropAndIgnoresObsoleteRowHeight()
     {
         var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");

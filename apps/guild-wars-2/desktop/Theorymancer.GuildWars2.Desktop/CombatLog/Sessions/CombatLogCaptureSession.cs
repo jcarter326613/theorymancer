@@ -1,21 +1,21 @@
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 using System.Diagnostics;
 using System.IO;
 
-namespace Theorymancer.GuildWars2.Desktop.Sessions;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
-public sealed class CaptureSession : IAsyncDisposable, IDisposable
+public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
 {
     private const int CaptureFramesPerSecond = 4;
     private static readonly long DiagnosticIntervalTicks = Stopwatch.Frequency / 2;
 
     private readonly IScreenRegionCapture _capture;
-    private readonly SessionWriter _writer;
+    private readonly CombatLogSessionWriter _writer;
     private readonly OcrWorker _ocrWorker;
-    private readonly OcrFrameDebugWriter _debugFrameWriter;
-    private readonly ActivityLogDebugWriter _debugActivityWriter;
+    private readonly CombatLogOcrFrameDebugWriter _debugFrameWriter;
+    private readonly CombatLogActivityLogDebugWriter _debugActivityWriter;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
     private volatile bool _diagnosticsEnabled;
@@ -26,12 +26,12 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
     private FrameMatchResult? _latestFrameMatch;
     private bool _disposed;
 
-    private CaptureSession(
+    private CombatLogCaptureSession(
         IScreenRegionCapture capture,
-        SessionWriter writer,
+        CombatLogSessionWriter writer,
         OcrWorker ocrWorker,
-        OcrFrameDebugWriter debugFrameWriter,
-        ActivityLogDebugWriter debugActivityWriter,
+        CombatLogOcrFrameDebugWriter debugFrameWriter,
+        CombatLogActivityLogDebugWriter debugActivityWriter,
         bool diagnosticsEnabled)
     {
         _capture = capture;
@@ -47,9 +47,9 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
 
     public event Action<RecognizedCombatLogLine>? LineRecognized;
 
-    public event Action<CaptureDiagnostics>? DiagnosticsUpdated;
+    public event Action<CombatLogCaptureDiagnostics>? DiagnosticsUpdated;
 
-    public static async Task<CaptureSession> StartAsync(
+    public static async Task<CombatLogCaptureSession> StartAsync(
         SelectedGameWindow gameWindow,
         CollectorSettings settings,
         bool diagnosticsEnabled)
@@ -59,23 +59,23 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
             throw new InvalidOperationException("Calibrate a combat-log crop before recording.");
         }
 
-        var writer = await SessionWriter.CreateAsync();
+        var writer = await CombatLogSessionWriter.CreateAsync();
         try
         {
             var capture = new VisibleScreenRegionCapture(gameWindow, settings.CombatLogCrop);
-            var debugFrameWriter = new OcrFrameDebugWriter(Directory.GetCurrentDirectory(), DateTimeOffset.Now);
-            var debugActivityWriter = new ActivityLogDebugWriter(debugFrameWriter.SessionDirectory);
+            var debugFrameWriter = new CombatLogOcrFrameDebugWriter(Directory.GetCurrentDirectory(), DateTimeOffset.Now);
+            var debugActivityWriter = new CombatLogActivityLogDebugWriter(debugFrameWriter.SessionDirectory);
             if (diagnosticsEnabled)
             {
                 debugFrameWriter.EnsureSessionDirectory();
             }
 
-            CaptureSession? session = null;
+            CombatLogCaptureSession? session = null;
             var ocrWorker = new OcrWorker(
                 WindowsCombatLogOcrEngine.CreateEnglish(),
                 async line =>
                 {
-                    await writer.WriteRecognizedLineAsync(line);
+                    await writer.WriteCombatLogLineAsync(line);
                     session?.LineRecognized?.Invoke(line);
                 },
                 preprocessed =>
@@ -95,7 +95,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
                 message => session?.StatusChanged?.Invoke(message),
                 lines => session?.WriteDebugOcrFrameAsync(lines) ?? Task.FromResult<long?>(null),
                 (rawFrameSequence, lines, match) => session?.WriteDebugOcrFrameMatch(rawFrameSequence, lines, match));
-            session = new CaptureSession(
+            session = new CombatLogCaptureSession(
                 capture,
                 writer,
                 ocrWorker,
@@ -147,14 +147,14 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
-    public CaptureStatistics Statistics => new(
+    public CombatLogCaptureStatistics Statistics => new(
         Interlocked.Read(ref _framesCaptured),
         Interlocked.Read(ref _ocrFramesQueued),
         _ocrWorker.RecognizedRows,
         _ocrWorker.EmptyRows,
         _ocrWorker.DroppedRows);
 
-    public ActivityLogDebugWriter DebugActivityWriter => _debugActivityWriter;
+    public CombatLogActivityLogDebugWriter DebugActivityWriter => _debugActivityWriter;
 
     public void SetDiagnosticsEnabled(bool enabled)
     {
@@ -163,7 +163,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         {
             _latestPreprocessedFrame = null;
             _latestFrameMatch = null;
-            DiagnosticsUpdated?.Invoke(new CaptureDiagnostics(
+            DiagnosticsUpdated?.Invoke(new CombatLogCaptureDiagnostics(
                 Statistics,
                 0,
                 0,
@@ -217,7 +217,7 @@ public sealed class CaptureSession : IAsyncDisposable, IDisposable
         }
 
         Interlocked.Exchange(ref _lastDiagnosticQpc, frame.QpcTimestamp);
-        DiagnosticsUpdated?.Invoke(new CaptureDiagnostics(
+        DiagnosticsUpdated?.Invoke(new CombatLogCaptureDiagnostics(
             Statistics,
             frame.Width,
             frame.Height,

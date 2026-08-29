@@ -1,19 +1,19 @@
-using Theorymancer.GuildWars2.Desktop.Ocr;
-using Theorymancer.GuildWars2.Desktop.Sessions;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 using System.Text.Json;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
 
-public sealed class OcrFrameDebugWriterTests
+public sealed class CombatLogOcrFrameDebugWriterTests
 {
     [Fact]
     public async Task WriteFrameAsync_CreatesSequentialJsonLineFrameFiles()
     {
         var workingDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        var sessionDirectory = Path.Combine(workingDirectory, "debug-ocr-frames", "2026-08-27_12-34-56-789");
+        var sessionDirectory = Path.Combine(workingDirectory, "debug-combat-log-ocr-frames", "2026-08-27_12-34-56-789");
         try
         {
-            using var writer = new OcrFrameDebugWriter(
+            using var writer = new CombatLogOcrFrameDebugWriter(
                 workingDirectory,
                 new DateTimeOffset(2026, 8, 27, 12, 34, 56, 789, TimeSpan.Zero));
 

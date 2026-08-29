@@ -1,11 +1,11 @@
 using System.Text;
 using System.IO;
 using System.Text.Json;
-using Theorymancer.GuildWars2.Desktop.Ocr;
+using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 
-namespace Theorymancer.GuildWars2.Desktop.Sessions;
+namespace Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
 
-public sealed class OcrFrameDebugWriter : IDisposable
+public sealed class CombatLogOcrFrameDebugWriter : IDisposable
 {
     private readonly string _sessionDirectory;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -13,11 +13,11 @@ public sealed class OcrFrameDebugWriter : IDisposable
     private long _frameSequence;
     private bool _disposed;
 
-    public OcrFrameDebugWriter(string workingDirectory, DateTimeOffset captureStartedAt)
+    public CombatLogOcrFrameDebugWriter(string workingDirectory, DateTimeOffset captureStartedAt)
     {
         _sessionDirectory = Path.Combine(
             workingDirectory,
-            "debug-ocr-frames",
+            "debug-combat-log-ocr-frames",
             captureStartedAt.ToString("yyyy-MM-dd_HH-mm-ss-fff"));
     }
 
