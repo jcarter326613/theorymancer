@@ -67,6 +67,9 @@ GCP project while remaining logically isolated:
   configuration plus environment-specific signing keys.
 - Each environment has distinct Cloud Run services, runtime service accounts,
   named Firestore databases, and Cloud Storage buckets.
+- The manually applied `bootstrap` root owns runtime service accounts and all
+  project IAM bindings. Workflow-applied Terraform roots must not mutate the
+  project IAM policy, and GitHub Actions identities must not be able to do so.
 - GitHub Environments separate development from production deployment
   permissions. Production should require reviewers before it is used by
   customers.
@@ -99,10 +102,11 @@ configuration does not grant database access, and no permissive Firestore rules
 are deployed. Each named database has an explicit deny-all client ruleset. Data
 access is server IAM only. The Guild Wars 2 service has no Firestore role.
 
-Firestore's free quota applies to only one database per project. The second
-named database and any usage beyond free allowances are billable, so both
-databases use Standard edition with point-in-time recovery disabled initially.
-This is a deliberate isolation-versus-cost tradeoff in the shared project.
+Named Firestore databases receive no free quota. Both databases are therefore
+billed for usage from their first read, write, delete, TTL deletion, byte of
+storage, or applicable network transfer. Both use Standard edition with
+point-in-time recovery disabled initially. This is a deliberate
+isolation-versus-cost tradeoff in the shared project.
 PostgreSQL remains a possible future system of record if query, transaction, or
 analytics requirements justify its fixed operational cost.
 

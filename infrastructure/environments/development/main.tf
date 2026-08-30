@@ -8,6 +8,9 @@ locals {
   firebase_tenant_id      = data.terraform_remote_state.shared.outputs.firebase_tenant_ids[local.environment]
   signing_key_id          = data.terraform_remote_state.shared.outputs.auth_signing_key_ids[local.environment]
   signing_key_version     = data.terraform_remote_state.shared.outputs.auth_signing_key_versions[local.environment]
+  web_service_account     = "tm-development-runtime@${var.project_id}.iam.gserviceaccount.com"
+  api_service_account     = "tm-development-api@${var.project_id}.iam.gserviceaccount.com"
+  gw2_service_account     = "tm-development-gw2-api@${var.project_id}.iam.gserviceaccount.com"
 }
 
 data "terraform_remote_state" "shared" {
@@ -19,24 +22,36 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-moved {
+removed {
   from = google_service_account.runtime
-  to   = google_service_account.web
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "google_service_account" "web" {
-  account_id   = "tm-development-runtime"
-  display_name = "Theorymancer development web"
+removed {
+  from = google_service_account.web
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "google_service_account" "api" {
-  account_id   = "tm-development-api"
-  display_name = "Theorymancer development central API"
+removed {
+  from = google_service_account.api
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "google_service_account" "guild_wars_2_api" {
-  account_id   = "tm-development-gw2-api"
-  display_name = "Theorymancer development Guild Wars 2 API"
+removed {
+  from = google_service_account.guild_wars_2_api
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "google_firestore_database" "this" {
@@ -77,36 +92,6 @@ resource "google_firebaserules_release" "firestore" {
   ruleset_name = "projects/${var.project_id}/rulesets/${google_firebaserules_ruleset.firestore_deny_all.name}"
 }
 
-resource "google_project_iam_member" "api_firestore_user" {
-  project = var.project_id
-  role    = "roles/datastore.user"
-  member  = "serviceAccount:${google_service_account.api.email}"
-
-  condition {
-    title       = "development-firestore-only"
-    description = "Restrict the development API to its named database."
-    expression  = "resource.name == \"projects/${var.project_id}/databases/${google_firestore_database.this.name}\""
-  }
-}
-
-resource "google_project_iam_member" "api_firebase_auth_viewer" {
-  project = var.project_id
-  role    = "roles/firebaseauth.viewer"
-  member  = "serviceAccount:${google_service_account.api.email}"
-}
-
-resource "google_kms_crypto_key_iam_member" "api_signer" {
-  crypto_key_id = local.signing_key_id
-  role          = "roles/cloudkms.signerVerifier"
-  member        = "serviceAccount:${google_service_account.api.email}"
-}
-
-resource "google_kms_crypto_key_iam_member" "api_public_key_viewer" {
-  crypto_key_id = local.signing_key_id
-  role          = "roles/cloudkms.publicKeyViewer"
-  member        = "serviceAccount:${google_service_account.api.email}"
-}
-
 resource "google_secret_manager_secret" "ip_hash" {
   project   = var.project_id
   secret_id = "theorymancer-development-ip-hash"
@@ -120,7 +105,7 @@ resource "google_secret_manager_secret_iam_member" "api_ip_hash_accessor" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.ip_hash.id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.api.email}"
+  member    = "serviceAccount:${local.api_service_account}"
 }
 
 resource "google_storage_bucket" "uploads" {
@@ -154,7 +139,7 @@ resource "google_storage_bucket" "game_assets" {
 resource "google_storage_bucket_iam_member" "guild_wars_2_api_game_assets" {
   bucket = google_storage_bucket.game_assets.name
   role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${google_service_account.guild_wars_2_api.email}"
+  member = "serviceAccount:${local.gw2_service_account}"
 }
 
 module "api" {
@@ -164,7 +149,7 @@ module "api" {
   region                = var.region
   service_name          = "theorymancer-development-api"
   image                 = var.api_image
-  service_account_email = google_service_account.api.email
+  service_account_email = local.api_service_account
   allow_unauthenticated = true
   ingress               = "INGRESS_TRAFFIC_ALL"
   max_instances         = 3
@@ -177,7 +162,7 @@ module "api" {
     AUTH_SIGNING_KEY_VERSION                   = local.signing_key_version
     AUTH_SIGNING_KEY_ID                        = local.signing_key_version
     WEB_ORIGIN                                 = var.web_origin
-    INTERNAL_FAILURE_REPORTER_SERVICE_ACCOUNTS = google_service_account.guild_wars_2_api.email
+    INTERNAL_FAILURE_REPORTER_SERVICE_ACCOUNTS = local.gw2_service_account
     UPLOADS_BUCKET                             = google_storage_bucket.uploads.name
   }
   secret_environment_variables = {
@@ -188,10 +173,6 @@ module "api" {
   }
 
   depends_on = [
-    google_project_iam_member.api_firestore_user,
-    google_project_iam_member.api_firebase_auth_viewer,
-    google_kms_crypto_key_iam_member.api_public_key_viewer,
-    google_kms_crypto_key_iam_member.api_signer,
     google_secret_manager_secret_iam_member.api_ip_hash_accessor,
   ]
 }
@@ -203,7 +184,7 @@ module "guild_wars_2_api" {
   region                = var.region
   service_name          = "theorymancer-development-guild-wars-2-api"
   image                 = var.guild_wars_2_api_image
-  service_account_email = google_service_account.guild_wars_2_api.email
+  service_account_email = local.gw2_service_account
   allow_unauthenticated = true
   ingress               = "INGRESS_TRAFFIC_ALL"
   max_instances         = 3
@@ -222,7 +203,7 @@ resource "google_cloud_run_v2_service_iam_member" "guild_wars_2_invokes_api" {
   location = var.region
   name     = module.api.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.guild_wars_2_api.email}"
+  member   = "serviceAccount:${local.gw2_service_account}"
 }
 
 module "web" {
@@ -232,7 +213,7 @@ module "web" {
   region                = var.region
   service_name          = "theorymancer-development-web"
   image                 = var.web_image
-  service_account_email = google_service_account.web.email
+  service_account_email = local.web_service_account
   allow_unauthenticated = true
   ingress               = "INGRESS_TRAFFIC_ALL"
   max_instances         = 3

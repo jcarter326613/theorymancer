@@ -18,9 +18,3 @@ variable "github_repository" {
   description = "GitHub repository allowed to deploy, in OWNER/REPOSITORY form."
   type        = string
 }
-
-variable "terraform_project_roles" {
-  description = "Additional project roles required by the Terraform deployment identity."
-  type        = set(string)
-  default     = []
-}

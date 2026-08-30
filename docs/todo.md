@@ -5,7 +5,8 @@
 - Split GitHub Actions access into least-privilege service accounts for shared
   infrastructure, development deployment, production deployment, and Guild
   Wars 2 asset synchronization. Bind each Workload Identity principal to its
-  intended environment and workflow.
+  intended environment and workflow. The current shared deployment identity no
+  longer has permission to modify project IAM.
 - Provision `theorymancer.com` DNS and edge routing before enabling production
   browser authentication. Route central API and Guild Wars 2 resource-server
   namespaces directly as defined in `architecture.md`.

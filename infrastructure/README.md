@@ -10,9 +10,9 @@ resources remain isolated by ownership:
 - `environments/production` deploys the production environment.
 - `modules` contains reusable environment resources.
 
-The environment roots provide public Cloud Run services, separate web, central
-API, and Guild Wars 2 runtime identities, named Firestore databases, Secret
-Manager containers, Cloud Storage buckets, and narrow runtime IAM grants.
+The environment roots provide public Cloud Run services, named Firestore
+databases, Secret Manager containers, and Cloud Storage buckets. The manually
+applied bootstrap root owns runtime service accounts and project IAM bindings.
 
 ## Prerequisites
 
@@ -44,16 +44,49 @@ repository, Terraform deployment service account, and GitHub Workload Identity
 Federation trust.
 
 ```bash
+gcloud auth application-default login
 terraform -chdir=infrastructure/bootstrap init \
   -backend-config="bucket=YOUR_TF_STATE_BUCKET" \
   -backend-config=backend.hcl
-terraform -chdir=infrastructure/bootstrap apply -var-file=bootstrap.tfvars
+terraform -chdir=infrastructure/bootstrap apply
 ```
 
 Reapply bootstrap before using the corrected auth infrastructure so the new
-APIs and deployment roles exist. The deployment identity has administrative
-roles for only the resource families Terraform manages; runtime identities are
-granted separately and narrowly in environment state.
+APIs and deployment roles exist. The checked-in `terraform.tfvars` is loaded
+automatically. Initialization is only required for a new checkout or after a
+backend/provider change.
+
+Bootstrap is the only root that may modify project IAM. It creates the runtime
+service accounts and grants their project-level permissions. GitHub Actions is
+explicitly prohibited from `roles/resourcemanager.projectIamAdmin` or any other
+role that can alter project IAM policy. Workflow-applied roots may manage IAM
+only on individual resources they deploy, such as Cloud Run services or buckets.
+
+### Migrating Existing Runtime Service Accounts
+
+The bootstrap ownership change preserves existing accounts without deleting
+them. Before applying this revision, import the previously environment-owned
+web and Guild Wars 2 service accounts into bootstrap state. Substitute a
+different project ID only if needed.
+
+```bash
+terraform -chdir=infrastructure/bootstrap import \
+  'google_service_account.runtime["development-web"]' \
+  projects/theorymancer/serviceAccounts/tm-development-runtime@theorymancer.iam.gserviceaccount.com
+terraform -chdir=infrastructure/bootstrap import \
+  'google_service_account.runtime["development-guild_wars_2_api"]' \
+  projects/theorymancer/serviceAccounts/tm-development-gw2-api@theorymancer.iam.gserviceaccount.com
+terraform -chdir=infrastructure/bootstrap import \
+  'google_service_account.runtime["production-web"]' \
+  projects/theorymancer/serviceAccounts/tm-production-runtime@theorymancer.iam.gserviceaccount.com
+terraform -chdir=infrastructure/bootstrap import \
+  'google_service_account.runtime["production-guild_wars_2_api"]' \
+  projects/theorymancer/serviceAccounts/tm-production-gw2-api@theorymancer.iam.gserviceaccount.com
+terraform -chdir=infrastructure/bootstrap apply
+```
+
+The next environment applies use `removed` blocks with `destroy = false` to
+relinquish the old state entries. They do not delete the service accounts.
 
 ## Shared Resources
 
@@ -178,10 +211,10 @@ internal failure endpoint must validate the configured reporter service account
 at application level even though the central service is network-public.
 
 Firestore uses separate named development and production databases. Production
-has deletion protection. Firestore's free quota applies to only one database in
-the project, so the second database is billable. Browser direct database access
-is prohibited; each database has a deny-all Firebase client ruleset and only
-server IAM is granted.
+has deletion protection. Named databases do not receive Firestore free quota,
+so both databases are billed for their usage. Browser direct database access is
+prohibited; each database has a deny-all Firebase client ruleset and only server
+IAM is granted.
 
 ## Web Configuration And Routing
 

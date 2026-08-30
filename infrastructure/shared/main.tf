@@ -4,6 +4,9 @@ locals {
     "${var.project_id}.firebaseapp.com",
     "${var.project_id}.web.app",
   ], var.development_web_origin == "" ? [] : [trimprefix(var.development_web_origin, "https://")]))
+  api_service_accounts = {
+    for environment in local.environments : environment => "tm-${environment}-api@${var.project_id}.iam.gserviceaccount.com"
+  }
 }
 
 resource "google_firebase_project" "this" {
@@ -109,4 +112,20 @@ resource "google_kms_crypto_key_version" "auth_signing" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+resource "google_kms_crypto_key_iam_member" "api_signer" {
+  for_each = local.environments
+
+  crypto_key_id = google_kms_crypto_key.auth_signing[each.key].id
+  role          = "roles/cloudkms.signerVerifier"
+  member        = "serviceAccount:${local.api_service_accounts[each.key]}"
+}
+
+resource "google_kms_crypto_key_iam_member" "api_public_key_viewer" {
+  for_each = local.environments
+
+  crypto_key_id = google_kms_crypto_key.auth_signing[each.key].id
+  role          = "roles/cloudkms.publicKeyViewer"
+  member        = "serviceAccount:${local.api_service_accounts[each.key]}"
 }

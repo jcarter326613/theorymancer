@@ -24,15 +24,36 @@ locals {
     "roles/datastore.owner",
     "roles/firebase.admin",
     "roles/firebaserules.admin",
-    "roles/iam.serviceAccountAdmin",
-    "roles/iam.serviceAccountUser",
     "roles/identityplatform.admin",
-    "roles/resourcemanager.projectIamAdmin",
     "roles/run.admin",
     "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
     "roles/storage.admin",
   ])
+
+  environments = {
+    development = {
+      firestore_database = "theorymancer-development"
+    }
+    production = {
+      firestore_database = "theorymancer-production"
+    }
+  }
+
+  runtime_service_accounts = merge([
+    for environment, configuration in local.environments : {
+      for service, suffix in {
+        web              = "runtime"
+        api              = "api"
+        guild_wars_2_api = "gw2-api"
+        } : "${environment}-${service}" => {
+        environment  = environment
+        service      = service
+        account_id   = "tm-${environment}-${suffix}"
+        display_name = "Theorymancer ${environment} ${replace(service, "_", " ")}"
+      }
+    }
+  ]...)
 }
 
 resource "google_project_service" "required" {
@@ -58,6 +79,46 @@ resource "google_service_account" "terraform" {
   project      = var.project_id
 
   depends_on = [google_project_service.required["iam.googleapis.com"]]
+}
+
+resource "google_service_account" "runtime" {
+  for_each = local.runtime_service_accounts
+
+  account_id   = each.value.account_id
+  display_name = each.value.display_name
+  project      = var.project_id
+
+  depends_on = [google_project_service.required["iam.googleapis.com"]]
+}
+
+resource "google_service_account_iam_member" "terraform_uses_runtime" {
+  for_each = google_service_account.runtime
+
+  service_account_id = each.value.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform.email}"
+}
+
+resource "google_project_iam_member" "api_firestore_user" {
+  for_each = local.environments
+
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.runtime["${each.key}-api"].email}"
+
+  condition {
+    title       = "${each.key}-firestore-only"
+    description = "Restrict the central API to its named database."
+    expression  = "resource.name == \"projects/${var.project_id}/databases/${each.value.firestore_database}\""
+  }
+}
+
+resource "google_project_iam_member" "api_firebase_auth_viewer" {
+  for_each = local.environments
+
+  project = var.project_id
+  role    = "roles/firebaseauth.viewer"
+  member  = "serviceAccount:${google_service_account.runtime["${each.key}-api"].email}"
 }
 
 resource "google_storage_bucket_iam_member" "terraform_state" {
@@ -103,7 +164,7 @@ resource "google_service_account_iam_member" "github_workload_identity_user" {
 }
 
 resource "google_project_iam_member" "terraform" {
-  for_each = setunion(local.default_terraform_roles, var.terraform_project_roles)
+  for_each = local.default_terraform_roles
 
   project = var.project_id
   role    = each.value
