@@ -16,8 +16,9 @@
 - Make refresh-token rotation retry-safe for a client that loses the token
   response after the server consumes the old token. Preserve reuse detection
   for genuinely stolen tokens.
-- Split Terraform plan and apply jobs so production reviewers approve the
-  generated plan rather than the workflow before planning.
+- Split environment Terraform plan and apply jobs so production reviewers
+  approve the generated environment plan rather than the workflow before
+  planning. Shared Terraform already uses a reviewed plan.
 - Replace mutable GitHub Action and container-base tags with pinned immutable
   revisions or digests.
 

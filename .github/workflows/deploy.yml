@@ -18,14 +18,110 @@ permissions:
     contents: read
     id-token: write
 
+concurrency:
+    group: theorymancer-infrastructure
+    cancel-in-progress: false
+
 jobs:
+    shared-plan:
+        name: Plan shared infrastructure
+        runs-on: ubuntu-latest
+        environment: development
+        outputs:
+            has_changes: ${{ steps.plan.outputs.has_changes }}
+        env:
+            GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+            GCP_REGION: ${{ vars.GCP_REGION }}
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+            DEVELOPMENT_WEB_ORIGIN: ${{ vars.DEVELOPMENT_WEB_ORIGIN }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - id: plan
+              name: Plan shared infrastructure
+              working-directory: infrastructure/shared
+              run: |
+                  set +e
+                  terraform plan -input=false -detailed-exitcode -out=tfplan \
+                    -var="project_id=${GCP_PROJECT_ID}" \
+                    -var="region=${GCP_REGION}" \
+                    -var="development_web_origin=${DEVELOPMENT_WEB_ORIGIN}"
+                  status=$?
+                  if [ "$status" -eq 1 ]; then
+                    exit 1
+                  fi
+                  echo "has_changes=$([ "$status" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+                  if [ "$status" -eq 2 ]; then
+                    terraform show -no-color tfplan | tee -a "$GITHUB_STEP_SUMMARY"
+                  fi
+
+            - name: Upload shared plan
+              if: steps.plan.outputs.has_changes == 'true'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: shared-terraform-plan
+                  path: infrastructure/shared/tfplan
+                  if-no-files-found: error
+
+    shared-apply:
+        name: Apply shared infrastructure
+        needs: shared-plan
+        if: needs.shared-plan.outputs.has_changes == 'true'
+        runs-on: ubuntu-latest
+        environment: production
+        env:
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - name: Download reviewed shared plan
+              uses: actions/download-artifact@v4
+              with:
+                  name: shared-terraform-plan
+                  path: infrastructure/shared
+
+            - name: Apply shared infrastructure
+              working-directory: infrastructure/shared
+              run: terraform apply -input=false -auto-approve tfplan
+
     deploy:
         name: Deploy ${{ inputs.environment || 'development' }}
+        needs:
+            - shared-plan
+            - shared-apply
+        if: >-
+            always() && needs.shared-plan.result == 'success' &&
+            (needs.shared-apply.result == 'success' || needs.shared-apply.result == 'skipped')
         runs-on: ubuntu-latest
         environment: ${{ inputs.environment || 'development' }}
-        concurrency:
-            group: theorymancer-infrastructure
-            cancel-in-progress: false
         env:
             ENVIRONMENT: ${{ inputs.environment || 'development' }}
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}

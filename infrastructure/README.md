@@ -94,9 +94,13 @@ Apply `shared` once before either environment. This root is separate because
 Identity Platform configuration is project-global and must not be duplicated in
 development and production state. It creates both tenants, both Firebase web
 apps, and a distinct RS256 KMS signing key/version for each environment.
-Environment deployments do not apply this state. Use the manually dispatched
-`Shared infrastructure` workflow so development and production deployments
-cannot overwrite or concurrently mutate project-global identity settings.
+
+Every `Deploy` workflow first plans this root. If that plan has changes, the
+`Apply shared infrastructure` job requires production approval and applies the
+saved plan before the requested environment deployment begins. A no-op shared
+plan proceeds directly to the environment deployment. The standalone `Shared
+infrastructure` workflow is manual-only for operator recovery and uses the
+same plan-before-approval flow.
 
 ```bash
 terraform -chdir=infrastructure/shared init \
@@ -129,9 +133,9 @@ variables:
 - `WEB_ORIGIN`: exact allowed browser origin. Use `https://theorymancer.com` in
   production and the deployed web `run.app` origin in development.
 - `IP_HASH_SECRET_VERSION`: pinned Secret Manager version, initially `1`.
-- `DEVELOPMENT_WEB_ORIGIN`: repository or production Environment variable used
-  only by the shared-infrastructure workflow to retain the development
-  `run.app` domain in Identity Platform.
+- `DEVELOPMENT_WEB_ORIGIN`: repository variable containing the development
+  `run.app` origin. The pre-approval shared plan must receive the same value as
+  the protected shared apply, so do not define environment-specific overrides.
 
 Protect the production Environment with required reviewers.
 

@@ -70,6 +70,10 @@ GCP project while remaining logically isolated:
 - The manually applied `bootstrap` root owns runtime service accounts and all
   project IAM bindings. Workflow-applied Terraform roots must not mutate the
   project IAM policy, and GitHub Actions identities must not be able to do so.
+- Every environment deployment first plans the project-global `shared` root. A
+  shared diff requires production approval before its reviewed plan is applied;
+  the environment deployment runs only after that apply succeeds or the shared
+  plan is a no-op.
 - GitHub Environments separate development from production deployment
   permissions. Production should require reviewers before it is used by
   customers.
