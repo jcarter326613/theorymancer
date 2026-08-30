@@ -333,7 +333,9 @@ jobs:
     shared-development-origin-plan:
         name: Plan discovered development origin
         needs: deploy
-        if: needs.deploy.outputs.initial_development_origin == 'true'
+        if: >-
+            always() && needs.deploy.result == 'success' &&
+            needs.deploy.outputs.initial_development_origin == 'true'
         runs-on: ubuntu-latest
         environment: development
         outputs:
@@ -389,7 +391,9 @@ jobs:
     shared-development-origin-apply:
         name: Apply discovered development origin
         needs: shared-development-origin-plan
-        if: needs.shared-development-origin-plan.outputs.has_changes == 'true'
+        if: >-
+            always() && needs.shared-development-origin-plan.result == 'success' &&
+            needs.shared-development-origin-plan.outputs.has_changes == 'true'
         runs-on: ubuntu-latest
         environment: production
         env:
