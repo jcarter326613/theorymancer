@@ -4,8 +4,6 @@ locals {
   gw2_auth_audience       = "theorymancer:games:guild-wars-2:production"
   uploads_bucket_name     = "${var.project_id}-theorymancer-production-uploads"
   game_assets_bucket_name = "${var.project_id}-theorymancer-production-game-assets"
-  firebase_web_app        = data.terraform_remote_state.shared.outputs.firebase_web_app_configs[local.environment]
-  firebase_tenant_id      = data.terraform_remote_state.shared.outputs.firebase_tenant_ids[local.environment]
   signing_key_id          = data.terraform_remote_state.shared.outputs.auth_signing_key_ids[local.environment]
   signing_key_version     = data.terraform_remote_state.shared.outputs.auth_signing_key_versions[local.environment]
   web_service_account     = "tm-production-runtime@${var.project_id}.iam.gserviceaccount.com"
@@ -160,7 +158,6 @@ module "api" {
   environment_variables = {
     GCP_PROJECT_ID                             = var.project_id
     FIRESTORE_DATABASE_ID                      = google_firestore_database.this.name
-    FIREBASE_TENANT_ID                         = local.firebase_tenant_id
     AUTH_ISSUER                                = local.auth_issuer
     GW2_AUTH_AUDIENCE                          = local.gw2_auth_audience
     AUTH_SIGNING_KEY_VERSION                   = local.signing_key_version
@@ -222,13 +219,7 @@ module "web" {
   ingress               = "INGRESS_TRAFFIC_ALL"
   max_instances         = 3
   environment_variables = {
-    API_URL                      = module.api.uri
-    GUILD_WARS_2_API_URL         = module.guild_wars_2_api.uri
-    FIREBASE_API_KEY             = local.firebase_web_app.api_key
-    FIREBASE_APP_ID              = local.firebase_web_app.app_id
-    FIREBASE_AUTH_DOMAIN         = local.firebase_web_app.auth_domain
-    FIREBASE_MESSAGING_SENDER_ID = local.firebase_web_app.messaging_sender_id
-    FIREBASE_PROJECT_ID          = local.firebase_web_app.project_id
-    FIREBASE_TENANT_ID           = local.firebase_tenant_id
+    API_URL              = module.api.uri
+    GUILD_WARS_2_API_URL = module.guild_wars_2_api.uri
   }
 }

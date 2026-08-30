@@ -1,18 +1,14 @@
 locals {
   required_services = toset([
     "artifactregistry.googleapis.com",
-    "apikeys.googleapis.com",
     "cloudkms.googleapis.com",
     "cloudresourcemanager.googleapis.com",
-    "firebase.googleapis.com",
     "firebaserules.googleapis.com",
     "firestore.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
-    "identitytoolkit.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
-    "securetoken.googleapis.com",
     "serviceusage.googleapis.com",
     "storage.googleapis.com",
     "sts.googleapis.com",
@@ -22,9 +18,7 @@ locals {
     "roles/artifactregistry.admin",
     "roles/cloudkms.admin",
     "roles/datastore.owner",
-    "roles/firebase.admin",
     "roles/firebaserules.admin",
-    "roles/identityplatform.admin",
     "roles/run.admin",
     "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
@@ -111,14 +105,6 @@ resource "google_project_iam_member" "api_firestore_user" {
     description = "Restrict the central API to its named database."
     expression  = "resource.name == \"projects/${var.project_id}/databases/${each.value.firestore_database}\""
   }
-}
-
-resource "google_project_iam_member" "api_firebase_auth_viewer" {
-  for_each = local.environments
-
-  project = var.project_id
-  role    = "roles/firebaseauth.viewer"
-  member  = "serviceAccount:${google_service_account.runtime["${each.key}-api"].email}"
 }
 
 resource "google_storage_bucket_iam_member" "terraform_state" {

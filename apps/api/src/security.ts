@@ -1,6 +1,8 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto"
 import { isIP } from "node:net"
 
+import argon2 from "argon2"
+
 import type { Request } from "express"
 import {
     calculateJwkThumbprint,
@@ -12,6 +14,36 @@ import type { JWK } from "jose"
 
 export function hashSecret(value: string): string {
     return createHash("sha256").update(value).digest("base64url")
+}
+
+const argonOptions = {
+    type: argon2.argon2id,
+    memoryCost: 19 * 1024,
+    timeCost: 2,
+    parallelism: 1,
+    hashLength: 32,
+}
+
+export function normalizeEmail(value: string): string | undefined {
+    const email = value.trim().toLowerCase()
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254
+        ? email
+        : undefined
+}
+
+export async function hashPassword(password: string): Promise<string> {
+    return argon2.hash(password, argonOptions)
+}
+
+export async function verifyPassword(
+    password: string,
+    encoded: string,
+): Promise<boolean> {
+    try {
+        return encoded.startsWith("$argon2id$") && await argon2.verify(encoded, password)
+    } catch {
+        return false
+    }
 }
 
 export function hashIp(ip: string, secret: string): string {

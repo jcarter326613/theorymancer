@@ -6,6 +6,7 @@ export const gameScope = "guild-wars-2.assets.read"
 export interface Identity {
     uid: string
     email?: string
+    webSession?: WebSession
 }
 
 export interface IdentityVerifier {
@@ -19,9 +20,20 @@ export interface ServiceIdentityVerifier {
 export interface Account {
     uid: string
     email?: string
+    passwordHash?: string
     platformRole: "user" | "admin"
     createdAt: number
     updatedAt: number
+}
+
+export interface WebSession {
+    tokenHash: string
+    uid: string
+    csrfTokenHash: string
+    expiresAt: number
+    createdAt: number
+    lastUsedAt: number
+    revokedAt?: number
 }
 
 export interface GameGrant {
@@ -82,6 +94,17 @@ export type RefreshRotationResult =
 export interface AuthStore {
     upsertAccount(identity: Identity, now: number): Promise<Account>
     getAccount(uid: string): Promise<Account | undefined>
+    getAccountByEmailHash(emailHash: string): Promise<Account | undefined>
+    createAccount(account: Account, emailHash: string): Promise<void>
+    updatePassword(uid: string, passwordHash: string, now: number): Promise<void>
+    createWebSession(session: WebSession): Promise<void>
+    getWebSession(tokenHash: string): Promise<WebSession | undefined>
+    rotateWebSessionCsrf(
+        tokenHash: string,
+        csrfTokenHash: string,
+        now: number,
+    ): Promise<boolean>
+    revokeWebSession(tokenHash: string, now: number): Promise<void>
     listGameGrants(uid: string): Promise<GameGrant[]>
     getGameGrant(uid: string, game: string): Promise<GameGrant | undefined>
     putGameGrant(uid: string, game: string, now: number): Promise<GameGrant>

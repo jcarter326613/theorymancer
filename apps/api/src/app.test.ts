@@ -388,6 +388,7 @@ class MemoryAuthStore implements AuthStore {
     public readonly authorizations = new Map<string, DesktopAuthorization>()
     public readonly refreshFamilies = new Map<string, RefreshFamily>()
     public readonly refreshTokens = new Map<string, RefreshTokenRecord>()
+    public readonly webSessions = new Map<string, import("./auth-types.js").WebSession>()
     public readonly dpopProofs = new Map<string, number>()
     public readonly ipSecurity = new Map<
         string,
@@ -405,6 +406,44 @@ class MemoryAuthStore implements AuthStore {
         }
         this.accounts.set(identity.uid, account)
         return account
+    }
+
+    public async getAccountByEmailHash(emailHash: string) {
+        return [...this.accounts.values()].find((account) => account.email && hashSecret(account.email) === emailHash)
+    }
+
+    public async createAccount(account: Account, emailHash: string) {
+        if (await this.getAccountByEmailHash(emailHash)) throw new Error("email_exists")
+        this.accounts.set(account.uid, account)
+    }
+
+    public async updatePassword(uid: string, passwordHash: string, timestamp: number) {
+        const account = this.accounts.get(uid)
+        if (account !== undefined) {
+            account.passwordHash = passwordHash
+            account.updatedAt = timestamp
+        }
+    }
+
+    public async createWebSession(session: import("./auth-types.js").WebSession) {
+        this.webSessions.set(session.tokenHash, session)
+    }
+
+    public async getWebSession(tokenHash: string) {
+        return this.webSessions.get(tokenHash)
+    }
+
+    public async rotateWebSessionCsrf(tokenHash: string, csrfTokenHash: string, timestamp: number) {
+        const session = this.webSessions.get(tokenHash)
+        if (session === undefined || session.revokedAt !== undefined || session.expiresAt <= timestamp) return false
+        session.csrfTokenHash = csrfTokenHash
+        session.lastUsedAt = timestamp
+        return true
+    }
+
+    public async revokeWebSession(tokenHash: string, timestamp: number) {
+        const session = this.webSessions.get(tokenHash)
+        if (session !== undefined) session.revokedAt = timestamp
     }
 
     public async getAccount(uid: string) {

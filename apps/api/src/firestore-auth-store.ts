@@ -10,6 +10,7 @@ import type {
     RefreshFamily,
     RefreshRotationResult,
     RefreshTokenRecord,
+    WebSession,
 } from "./auth-types.js"
 import { gameId } from "./auth-types.js"
 
@@ -35,11 +36,8 @@ export class FirestoreAuthStore implements AuthStore {
                 Account | undefined
             const account: Account = {
                 uid: identity.uid,
-                ...(identity.email === undefined
-                    ? current?.email === undefined
-                        ? {}
-                        : { email: current.email }
-                    : { email: identity.email }),
+                email: identity.email ?? current?.email ?? "",
+                passwordHash: current?.passwordHash ?? "",
                 platformRole: current?.platformRole ?? "user",
                 createdAt: current?.createdAt ?? now,
                 updatedAt: now,
@@ -53,6 +51,69 @@ export class FirestoreAuthStore implements AuthStore {
         return (
             await this.firestore.collection("accounts").doc(uid).get()
         ).data() as Account | undefined
+    }
+
+    public async getAccountByEmailHash(
+        emailHash: string,
+    ): Promise<Account | undefined> {
+        const index = await this.firestore
+            .collection("accountEmailIndexes")
+            .doc(emailHash)
+            .get()
+        const uid = index.data()?.uid as string | undefined
+        return uid === undefined ? undefined : this.getAccount(uid)
+    }
+
+    public async createAccount(account: Account, emailHash: string): Promise<void> {
+        const accountReference = this.firestore.collection("accounts").doc(account.uid)
+        const emailReference = this.firestore
+            .collection("accountEmailIndexes")
+            .doc(emailHash)
+        await this.firestore.runTransaction(async (transaction) => {
+            if ((await transaction.get(emailReference)).exists) {
+                throw new Error("email_exists")
+            }
+            transaction.create(accountReference, account)
+            transaction.create(emailReference, { uid: account.uid, createdAt: account.createdAt })
+        })
+    }
+
+    public async updatePassword(
+        uid: string,
+        passwordHash: string,
+        now: number,
+    ): Promise<void> {
+        await this.firestore.collection("accounts").doc(uid).update({ passwordHash, updatedAt: now })
+    }
+
+    public async createWebSession(session: WebSession): Promise<void> {
+        await this.firestore.collection("webSessions").doc(session.tokenHash).create(session)
+    }
+
+    public async getWebSession(tokenHash: string): Promise<WebSession | undefined> {
+        return (await this.firestore.collection("webSessions").doc(tokenHash).get())
+            .data() as WebSession | undefined
+    }
+
+    public async rotateWebSessionCsrf(
+        tokenHash: string,
+        csrfTokenHash: string,
+        now: number,
+    ): Promise<boolean> {
+        const reference = this.firestore.collection("webSessions").doc(tokenHash)
+        return this.firestore.runTransaction(async (transaction) => {
+            const session = (await transaction.get(reference)).data() as WebSession | undefined
+            if (session === undefined || session.revokedAt !== undefined || session.expiresAt <= now) return false
+            transaction.update(reference, { csrfTokenHash, lastUsedAt: now })
+            return true
+        })
+    }
+
+    public async revokeWebSession(tokenHash: string, now: number): Promise<void> {
+        const reference = this.firestore.collection("webSessions").doc(tokenHash)
+        await this.firestore.runTransaction(async (transaction) => {
+            if ((await transaction.get(reference)).exists) transaction.update(reference, { revokedAt: now })
+        })
     }
 
     public async listGameGrants(uid: string): Promise<GameGrant[]> {

@@ -1,57 +1,23 @@
 import { StrictMode, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
-import { initializeApp } from "firebase/app"
-import {
-    getAuth,
-    getRedirectResult,
-    GoogleAuthProvider,
-    onAuthStateChanged,
-    signInWithPopup,
-    signInWithRedirect,
-    signOut,
-    type Auth,
-    type User,
-} from "firebase/auth"
 
 import "./styles.css"
 
 const runtimeConfig = window.__THEORYMANCER_CONFIG__
-const firebaseFields = [
-    "apiUrl",
-    "apiKey",
-    "authDomain",
-    "projectId",
-    "appId",
-    "tenantId",
-] as const
-const missingFirebaseFields = runtimeConfig
-    ? firebaseFields.filter((field) => !runtimeConfig[field])
-    : [...firebaseFields]
-
-let auth: Auth | null = null
-let redirectResultPromise: Promise<unknown> | null = null
-
-if (runtimeConfig && missingFirebaseFields.length === 0) {
+if (runtimeConfig?.apiUrl) {
     const apiUrl = new URL(runtimeConfig.apiUrl)
     if (apiUrl.protocol !== "https:" && apiUrl.hostname !== "localhost") {
         throw new Error("The Theorymancer API URL must use HTTPS.")
     }
-    const firebaseApp = initializeApp({
-        apiKey: runtimeConfig.apiKey,
-        authDomain: runtimeConfig.authDomain,
-        projectId: runtimeConfig.projectId,
-        appId: runtimeConfig.appId,
-    })
-    auth = getAuth(firebaseApp)
-    auth.tenantId = runtimeConfig.tenantId || null
-    redirectResultPromise = getRedirectResult(auth)
 }
 
+type User = { uid: string; email: string }
 type AuthState = {
     user: User | null
     loading: boolean
     error: string | null
 }
+let csrfToken: string | undefined
 
 type DesktopRequest = {
     code_challenge: string
@@ -100,83 +66,32 @@ function errorCode(error: unknown): string | undefined {
 function useAuthentication(): AuthState {
     const [state, setState] = useState<AuthState>({
         user: null,
-        loading: auth !== null,
-        error:
-            auth === null
-                ? "Google sign-in is not configured for this environment."
-                : null,
+        loading: true,
+        error: runtimeConfig?.apiUrl ? null : "The API is not configured for this environment.",
     })
 
     useEffect(() => {
-        if (!auth) return
-
         let active = true
-        redirectResultPromise?.catch((error: unknown) => {
-            if (active) {
-                setState((current) => ({
-                    ...current,
-                    error: readableError(
-                        error,
-                        "Google sign-in did not complete.",
-                    ),
-                }))
-            }
-        })
-
-        const unsubscribe = onAuthStateChanged(
-            auth,
-            (user) => {
-                if (active) {
-                    setState((current) => ({
-                        user,
-                        loading: false,
-                        error: user ? null : current.error,
-                    }))
-                }
-            },
-            (error) => {
-                if (active) {
-                    setState({
-                        user: null,
-                        loading: false,
-                        error: readableError(
-                            error,
-                            "Unable to check sign-in status.",
-                        ),
-                    })
-                }
-            },
-        )
+        fetch(apiEndpoint("/v1/auth/session"), { credentials: "include" })
+            .then(async (response) => {
+                if (response.status === 401) return null
+                if (!response.ok) throw new Error(await responseMessage(response, "Unable to check sign-in status"))
+                return response.json() as Promise<{ account: AccountDetails; csrf_token: string }>
+            })
+            .then((session) => {
+                if (!active) return
+                csrfToken = session?.csrf_token
+                const account = session?.account
+                setState({ user: account?.uid && account.email ? { uid: account.uid, email: account.email } : null, loading: false, error: null })
+            })
+            .catch((error: unknown) => active && setState({ user: null, loading: false, error: readableError(error, "Unable to check sign-in status.") }))
 
         return () => {
             active = false
-            unsubscribe()
         }
     }, [])
 
     return state
-}
-
-async function googleSignIn(): Promise<void> {
-    if (!auth || !runtimeConfig)
-        throw new Error("Google sign-in is unavailable.")
-
-    auth.tenantId = runtimeConfig.tenantId || null
-    const provider = new GoogleAuthProvider()
-    provider.setCustomParameters({ prompt: "select_account" })
-
-    try {
-        await signInWithPopup(auth, provider)
-    } catch (error) {
-        const code = errorCode(error)
-        if (
-            code !== "auth/popup-blocked" &&
-            code !== "auth/operation-not-supported-in-this-environment"
-        ) {
-            throw error
-        }
-        await signInWithRedirect(auth, provider)
-    }
 }
 
 function apiEndpoint(path: string): string {
@@ -185,16 +100,15 @@ function apiEndpoint(path: string): string {
 }
 
 async function authenticatedRequest(
-    user: User,
     path: string,
     init?: RequestInit,
 ) {
-    const idToken = await user.getIdToken()
     return fetch(apiEndpoint(path), {
         ...init,
+        credentials: "include",
         headers: {
             ...init?.headers,
-            Authorization: `Bearer ${idToken}`,
+            ...(init?.method && !["GET", "HEAD"].includes(init.method) && csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
             ...(init?.body ? { "Content-Type": "application/json" } : {}),
         },
     })
@@ -282,8 +196,8 @@ function AccountPage({ authState }: { authState: AuthState }) {
         setError(null)
 
         Promise.all([
-            authenticatedRequest(authState.user, "/v1/account"),
-            authenticatedRequest(authState.user, "/v1/account/game-grants"),
+            authenticatedRequest("/v1/account"),
+            authenticatedRequest("/v1/account/game-grants"),
         ])
             .then(async ([accountResponse, grantsResponse]) => {
                 if (!accountResponse.ok && accountResponse.status !== 404) {
@@ -336,14 +250,23 @@ function AccountPage({ authState }: { authState: AuthState }) {
         }
     }, [authState.user])
 
-    async function handleSignIn() {
+    async function handleSignIn(register: boolean) {
+        const email = window.prompt("Email address")
+        const password = window.prompt("Password (at least 12 characters)")
+        if (!email || !password) return
         setActionPending(true)
         setError(null)
         try {
-            await googleSignIn()
+            const response = await fetch(apiEndpoint(register ? "/v1/auth/register" : "/v1/auth/login"), {
+                method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }),
+            })
+            if (!response.ok) throw new Error(await responseMessage(response, "Sign-in did not complete"))
+            const body = await response.json() as { csrf_token: string }
+            csrfToken = body.csrf_token
+            window.location.reload()
         } catch (signInError) {
             setError(
-                readableError(signInError, "Google sign-in did not complete."),
+                readableError(signInError, "Sign-in did not complete."),
             )
         } finally {
             setActionPending(false)
@@ -351,11 +274,13 @@ function AccountPage({ authState }: { authState: AuthState }) {
     }
 
     async function handleSignOut() {
-        if (!auth) return
         setActionPending(true)
         setError(null)
         try {
-            await signOut(auth)
+            const response = await authenticatedRequest("/v1/auth/logout", { method: "POST" })
+            if (!response.ok) throw new Error(await responseMessage(response, "Sign-out did not complete"))
+            csrfToken = undefined
+            window.location.reload()
         } catch (signOutError) {
             setError(readableError(signOutError, "Sign-out did not complete."))
         } finally {
@@ -370,7 +295,6 @@ function AccountPage({ authState }: { authState: AuthState }) {
         setGrantStatus(null)
         try {
             const response = await authenticatedRequest(
-                authState.user,
                 `/v1/admin/accounts/${encodeURIComponent(grantUid.trim())}/game-grants/guild-wars-2`,
                 { method },
             )
@@ -398,7 +322,7 @@ function AccountPage({ authState }: { authState: AuthState }) {
 
     const user = authState.user
     const displayName =
-        account?.displayName ?? user?.displayName ?? "Theorymancer player"
+        account?.displayName ?? "Theorymancer player"
     const email = account?.email ?? user?.email
 
     return (
@@ -423,20 +347,9 @@ function AccountPage({ authState }: { authState: AuthState }) {
                 ) : user ? (
                     <>
                         <div className="identity">
-                            {user.photoURL ? (
-                                <img
-                                    src={user.photoURL}
-                                    alt=""
-                                    referrerPolicy="no-referrer"
-                                />
-                            ) : (
-                                <span
-                                    className="avatar-fallback"
-                                    aria-hidden="true"
-                                >
-                                    {displayName.charAt(0).toUpperCase()}
-                                </span>
-                            )}
+                            <span className="avatar-fallback" aria-hidden="true">
+                                {displayName.charAt(0).toUpperCase()}
+                            </span>
                             <div>
                                 <h2 id="account-heading">{displayName}</h2>
                                 {email && <p>{email}</p>}
@@ -466,15 +379,20 @@ function AccountPage({ authState }: { authState: AuthState }) {
                         <button
                             className="primary-button"
                             type="button"
-                            disabled={actionPending || auth === null}
-                            onClick={handleSignIn}
+                            disabled={actionPending || !runtimeConfig?.apiUrl}
+                            onClick={() => handleSignIn(false)}
                         >
-                            <span className="google-mark" aria-hidden="true">
-                                G
-                            </span>
                             {actionPending
-                                ? "Opening Google..."
-                                : "Continue with Google"}
+                                ? "Signing in..."
+                                : "Sign in"}
+                        </button>
+                        <button
+                            className="text-button"
+                            type="button"
+                            disabled={actionPending || !runtimeConfig?.apiUrl}
+                            onClick={() => handleSignIn(true)}
+                        >
+                            Create account
                         </button>
                     </>
                 )}
@@ -528,7 +446,7 @@ function AccountPage({ authState }: { authState: AuthState }) {
                             onChange={(event) =>
                                 setGrantUid(event.target.value)
                             }
-                            placeholder="Identity Platform UID"
+                            placeholder="Theorymancer account ID"
                         />
                         <div className="grant-actions">
                             <button
@@ -653,7 +571,6 @@ function DesktopAuthorizePage({ authState }: { authState: AuthState }) {
         setError(null)
 
         authenticatedRequest(
-            authState.user,
             "/v1/auth/desktop/authorizations",
             {
                 method: "POST",
@@ -702,12 +619,24 @@ function DesktopAuthorizePage({ authState }: { authState: AuthState }) {
         setPending(true)
         setError(null)
         try {
-            if (!authState.user) await googleSignIn()
+            if (!authState.user) {
+                const email = window.prompt("Email address")
+                const password = window.prompt("Password")
+                if (!email || !password) throw new Error("Email and password are required.")
+                const response = await fetch(apiEndpoint("/v1/auth/login"), {
+                    method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }),
+                })
+                if (!response.ok) throw new Error(await responseMessage(response, "Sign-in did not complete"))
+                const body = await response.json() as { csrf_token: string }
+                csrfToken = body.csrf_token
+                window.location.reload()
+                return
+            }
             setApproved(true)
         } catch (signInError) {
             setPending(false)
             setError(
-                readableError(signInError, "Google sign-in did not complete."),
+                readableError(signInError, "Sign-in did not complete."),
             )
         }
     }
@@ -732,8 +661,8 @@ function DesktopAuthorizePage({ authState }: { authState: AuthState }) {
                 <h1 id="authorize-title">Authorize Theorymancer Desktop</h1>
                 <p className="summary">
                     Connect this browser account to the desktop installation
-                    that opened this page. Your Google credentials never pass
-                    through the desktop app.
+                    that opened this page. Your password never passes through
+                    the desktop app.
                 </p>
 
                 <div className="security-note">
@@ -769,15 +698,12 @@ function DesktopAuthorizePage({ authState }: { authState: AuthState }) {
                         <button
                             className="primary-button"
                             type="button"
-                            disabled={auth === null}
+                            disabled={!runtimeConfig?.apiUrl}
                             onClick={handleAuthorize}
                         >
-                            <span className="google-mark" aria-hidden="true">
-                                G
-                            </span>
                             {authState.user
                                 ? "Authorize this desktop"
-                                : "Continue with Google"}
+                                : "Sign in to authorize"}
                         </button>
                     ))}
                 <p className="fine-print">

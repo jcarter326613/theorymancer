@@ -18,14 +18,19 @@ import {
     constantTimeEqual,
     extractBearer,
     hashIp,
+    hashPassword,
     hashSecret,
+    normalizeEmail,
     normalizeIp,
     validatePublicP256Jwk,
     verifyDpopProof,
+    verifyPassword,
 } from "./security.js"
 
 const authorizationLifetimeMs = 5 * 60 * 1000
 const refreshLifetimeMs = 30 * 24 * 60 * 60 * 1000
+const webSessionLifetimeMs = 14 * 24 * 60 * 60 * 1000
+const sessionCookieName = "__Host-theorymancer-session"
 const codeChallengePattern = /^[A-Za-z0-9_-]{43}$/
 const codeVerifierPattern = /^[A-Za-z0-9._~-]{43,128}$/
 const gameIdSchema = z.literal(gameId)
@@ -59,6 +64,11 @@ const tokenRequestSchema = z.discriminatedUnion("grant_type", [
 const revocationRequestSchema = z.object({ token: z.string().min(1).max(2048) })
 
 const internalFailureSchema = z.object({ ip: z.string().min(1).max(128) })
+const credentialsSchema = z.object({
+    email: z.string().min(3).max(254),
+    password: z.string().min(12).max(256),
+})
+const passwordResetSchema = z.object({ password: z.string().min(12).max(256) })
 
 export function createApp(dependencies: AppDependencies): Express {
     const app = express()
@@ -69,7 +79,8 @@ export function createApp(dependencies: AppDependencies): Express {
         cors({
             origin: dependencies.config.webOrigin,
             methods: ["GET", "POST", "PUT", "DELETE"],
-            allowedHeaders: ["Authorization", "Content-Type", "DPoP"],
+            allowedHeaders: ["Authorization", "Content-Type", "DPoP", "X-CSRF-Token"],
+            credentials: true,
         }),
     )
     app.use(express.json({ limit: "32kb" }))
@@ -98,6 +109,76 @@ export function createApp(dependencies: AppDependencies): Express {
         response.json(await dependencies.tokenIssuer.getJwks())
     })
 
+    app.post("/v1/auth/register", async (request, response) => {
+        response.set("Cache-Control", "no-store")
+        if (!hasExpectedOrigin(request)) return response.sendStatus(403)
+        const parsed = credentialsSchema.safeParse(request.body)
+        if (!parsed.success) return response.status(400).json({ error: "invalid_request" })
+        const email = normalizeEmail(parsed.data.email)
+        if (email === undefined) return response.status(400).json({ error: "invalid_request" })
+        const timestamp = now()
+        const uid = randomBytes(18).toString("base64url")
+        try {
+            await dependencies.store.createAccount(
+                {
+                    uid,
+                    email,
+                    passwordHash: await hashPassword(parsed.data.password),
+                    platformRole: "user",
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                },
+                hashSecret(email),
+            )
+        } catch (error) {
+            if (error instanceof Error && error.message === "email_exists") {
+                return response.status(409).json({ error: "email_unavailable" })
+            }
+            throw error
+        }
+        await startWebSession(response, uid)
+    })
+
+    app.post("/v1/auth/login", async (request, response) => {
+        response.set("Cache-Control", "no-store")
+        if (!hasExpectedOrigin(request)) return response.sendStatus(403)
+        const parsed = credentialsSchema.safeParse(request.body)
+        if (!parsed.success) return response.status(401).json({ error: "invalid_credentials" })
+        const email = normalizeEmail(parsed.data.email)
+        if (email === undefined) return response.status(401).json({ error: "invalid_credentials" })
+        const account = await dependencies.store.getAccountByEmailHash(hashSecret(email))
+        if (
+            account === undefined ||
+            account.passwordHash === undefined ||
+            !(await verifyPassword(parsed.data.password, account.passwordHash))
+        ) {
+            return response.status(401).json({ error: "invalid_credentials" })
+        }
+        await startWebSession(response, account.uid)
+    })
+
+    app.get("/v1/auth/session", async (request, response) => {
+        response.set("Cache-Control", "no-store")
+        const identity = await authenticateWeb(request, response)
+        if (identity?.webSession === undefined) return
+        const account = await dependencies.store.getAccount(identity.uid)
+        if (account === undefined) return response.sendStatus(401)
+        const csrfToken = randomBytes(32).toString("base64url")
+        if (!(await dependencies.store.rotateWebSessionCsrf(identity.webSession.tokenHash, hashSecret(csrfToken), now()))) {
+            return response.sendStatus(401)
+        }
+        response.json({ account: publicAccount(account), csrf_token: csrfToken })
+    })
+
+    app.post("/v1/auth/logout", async (request, response) => {
+        response.set("Cache-Control", "no-store")
+        const identity = await authenticateWeb(request, response)
+        if (identity?.webSession === undefined) return
+        await dependencies.store.revokeWebSession(identity.webSession.tokenHash, now())
+        clearSessionCookie(response)
+        response.sendStatus(204)
+    })
+
     app.post("/v1/auth/desktop/authorizations", async (request, response) => {
         response.set("Cache-Control", "no-store")
         const identity = await authenticateWeb(request, response)
@@ -119,10 +200,13 @@ export function createApp(dependencies: AppDependencies): Express {
         }
 
         const timestamp = now()
-        const account = await dependencies.store.upsertAccount(
-            identity,
-            timestamp,
-        )
+        const account = identity.webSession === undefined
+            ? await dependencies.store.upsertAccount(identity, now())
+            : await dependencies.store.getAccount(identity.uid)
+        if (account === undefined) {
+            response.sendStatus(401)
+            return
+        }
         const grant = await dependencies.store.getGameGrant(account.uid, gameId)
         if (grant?.active !== true) {
             response.status(403).json({ error: "invalid_game_grant" })
@@ -433,7 +517,13 @@ export function createApp(dependencies: AppDependencies): Express {
     app.get("/v1/account", async (request, response) => {
         const identity = await authenticateWeb(request, response)
         if (identity === undefined) return
-        const account = await dependencies.store.upsertAccount(identity, now())
+        const account = identity.webSession === undefined
+            ? await dependencies.store.upsertAccount(identity, now())
+            : await dependencies.store.getAccount(identity.uid)
+        if (account === undefined) {
+            response.sendStatus(401)
+            return
+        }
         response.json(publicAccount(account))
     })
 
@@ -495,6 +585,31 @@ export function createApp(dependencies: AppDependencies): Express {
             response.sendStatus(204)
         },
     )
+
+    app.put("/v1/account/password", async (request, response) => {
+        const identity = await authenticateWeb(request, response)
+        if (identity === undefined) return
+        const parsed = passwordResetSchema.safeParse(request.body)
+        if (!parsed.success) return response.status(400).json({ error: "invalid_request" })
+        const account = await dependencies.store.getAccount(identity.uid)
+        if (account === undefined) return response.sendStatus(401)
+        // Password changes invalidate desktop refresh credentials immediately.
+        await dependencies.store.updatePassword(identity.uid, await hashPassword(parsed.data.password), now())
+        await dependencies.store.revokeRefreshFamilies(identity.uid, now())
+        response.sendStatus(204)
+    })
+
+    app.put("/v1/admin/accounts/:uid/password", async (request, response) => {
+        const admin = await authenticateAdmin(request, response)
+        if (admin === undefined) return
+        const parsed = passwordResetSchema.safeParse(request.body)
+        if (!parsed.success) return response.status(400).json({ error: "invalid_request" })
+        if ((await dependencies.store.getAccount(request.params.uid)) === undefined) return response.sendStatus(404)
+        const timestamp = now()
+        await dependencies.store.updatePassword(request.params.uid, await hashPassword(parsed.data.password), timestamp)
+        await dependencies.store.revokeRefreshFamilies(request.params.uid, timestamp)
+        response.sendStatus(204)
+    })
 
     app.post("/v1/internal/auth-failures", async (request, response) => {
         const bearer = extractBearer(request.get("Authorization"))
@@ -567,8 +682,10 @@ export function createApp(dependencies: AppDependencies): Express {
         request: Request,
         response: Response,
     ): Promise<Identity | undefined> {
+        const cookieToken = cookieValue(request, sessionCookieName)
         const bearer = extractBearer(request.get("Authorization"))
-        if (bearer === undefined) {
+        const credential = cookieToken ?? bearer
+        if (credential === undefined) {
             await sendAuthenticationFailure(
                 request,
                 response,
@@ -578,7 +695,14 @@ export function createApp(dependencies: AppDependencies): Express {
             return undefined
         }
         try {
-            return await dependencies.identityVerifier.verify(bearer)
+            const identity = await dependencies.identityVerifier.verify(credential)
+            if (cookieToken !== undefined && isUnsafeMethod(request.method)) {
+                if (!hasExpectedOrigin(request) || identity.webSession === undefined || !constantTimeEqual(hashSecret(request.get("X-CSRF-Token") ?? ""), identity.webSession.csrfTokenHash)) {
+                    response.sendStatus(403)
+                    return undefined
+                }
+            }
+            return identity
         } catch {
             await sendAuthenticationFailure(
                 request,
@@ -588,6 +712,24 @@ export function createApp(dependencies: AppDependencies): Express {
             )
             return undefined
         }
+    }
+
+    async function startWebSession(response: Response, uid: string): Promise<void> {
+        const token = randomBytes(32).toString("base64url")
+        const csrfToken = randomBytes(32).toString("base64url")
+        const timestamp = now()
+        await dependencies.store.createWebSession({
+            tokenHash: hashSecret(token), uid, csrfTokenHash: hashSecret(csrfToken),
+            createdAt: timestamp, lastUsedAt: timestamp, expiresAt: timestamp + webSessionLifetimeMs,
+        })
+        setSessionCookie(response, token)
+        const account = await dependencies.store.getAccount(uid)
+        response.status(201).json({ account: account === undefined ? undefined : publicAccount(account), csrf_token: csrfToken })
+    }
+
+    function hasExpectedOrigin(request: Request): boolean {
+        const origin = request.get("Origin")
+        return origin === dependencies.config.webOrigin
     }
 
     async function authenticateAdmin(
@@ -710,6 +852,37 @@ export function createApp(dependencies: AppDependencies): Express {
         }
         response.status(status).json({ error })
     }
+}
+
+function cookieValue(request: Request, name: string): string | undefined {
+    const value = request.get("Cookie")
+        ?.split(";")
+        .map((part) => part.trim().split("=", 2))
+        .find(([key]) => key === name)?.[1]
+    return value === undefined ? undefined : decodeURIComponent(value)
+}
+
+function isUnsafeMethod(method: string): boolean {
+    return !["GET", "HEAD", "OPTIONS"].includes(method)
+}
+
+function setSessionCookie(response: Response, token: string): void {
+    response.cookie(sessionCookieName, token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        path: "/",
+        maxAge: webSessionLifetimeMs,
+    })
+}
+
+function clearSessionCookie(response: Response): void {
+    response.clearCookie(sessionCookieName, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        path: "/",
+    })
 }
 
 function externallyObservedOrigin(request: Request): string {

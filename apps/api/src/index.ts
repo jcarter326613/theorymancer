@@ -3,15 +3,14 @@ import { z } from "zod"
 import { createApp } from "./app.js"
 import { FirestoreAuthStore } from "./firestore-auth-store.js"
 import {
-    FirebaseIdentityVerifier,
     GoogleServiceIdentityVerifier,
     KmsTokenIssuer,
+    WebSessionIdentityVerifier,
 } from "./runtime-adapters.js"
 
 const environmentSchema = z.object({
     GCP_PROJECT_ID: z.string().min(1),
     FIRESTORE_DATABASE_ID: z.string().min(1),
-    FIREBASE_TENANT_ID: z.string().min(1),
     AUTH_ISSUER: z.string().url(),
     GW2_AUTH_AUDIENCE: z.string().min(1),
     AUTH_SIGNING_KEY_VERSION: z.string().min(1),
@@ -33,15 +32,13 @@ if (allowedServiceAccounts.has("")) {
     throw new Error("Service account allowlist contains an empty value")
 }
 
-const app = createApp({
-    store: new FirestoreAuthStore(
+const store = new FirestoreAuthStore(
         environment.GCP_PROJECT_ID,
         environment.FIRESTORE_DATABASE_ID,
-    ),
-    identityVerifier: new FirebaseIdentityVerifier(
-        environment.GCP_PROJECT_ID,
-        environment.FIREBASE_TENANT_ID,
-    ),
+    )
+const app = createApp({
+    store,
+    identityVerifier: new WebSessionIdentityVerifier(store),
     serviceIdentityVerifier: new GoogleServiceIdentityVerifier(issuer),
     tokenIssuer: new KmsTokenIssuer(
         environment.AUTH_SIGNING_KEY_VERSION,

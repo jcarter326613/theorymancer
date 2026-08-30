@@ -16,20 +16,13 @@ applied bootstrap root owns runtime service accounts and project IAM bindings.
 
 ## Prerequisites
 
-Install Terraform 1.8 or newer and authenticate locally with a Google Cloud
-identity that can administer the selected billing-enabled project. Create one
-GCS bucket before initializing Terraform; Terraform cannot store state in a
-bucket that it has not yet created.
-
-```bash
-gcloud storage buckets create gs://theorymancer-terraform-state \
-  --project=theorymancer \
-  --location=us-east1 \
-  --default-storage-class=STANDARD \
-  --uniform-bucket-level-access \
-  --public-access-prevention
-gcloud storage buckets update gs://theorymancer-terraform-state --versioning
-```
+Install Terraform 1.8 or newer and the Google Cloud CLI. The bootstrap script
+opens one browser sign-in when local credentials are missing or expired. That
+sign-in refreshes both the gcloud CLI and Terraform Application Default
+Credentials for a Google Cloud identity that can administer the selected
+billing-enabled project, then sets that project as ADC's quota project. The
+script exports that quota project for Terraform, then creates and hardens the
+initial GCS state bucket before Terraform initializes its remote backend.
 
 The shared state bucket uses distinct `theorymancer/bootstrap`,
 `theorymancer/shared`, `theorymancer/development`, and
@@ -37,24 +30,27 @@ The shared state bucket uses distinct `theorymancer/bootstrap`,
 
 ## Bootstrap
 
-Apply `bootstrap` locally as a project administrator. It enables Artifact
-Registry, Cloud Run, Firestore, Identity Toolkit, Firebase, Cloud KMS, Secret
-Manager, API Keys, Secure Token, IAM, and supporting APIs. It also creates the Artifact Registry
-repository, Terraform deployment service account, and GitHub Workload Identity
-Federation trust.
+Run `bootstrap/initialize.ps1` locally as a project administrator. It creates
+and hardens the remote-state bucket, enables Artifact Registry, Cloud Run,
+Firestore, Identity Toolkit, Firebase, Cloud KMS, Secret Manager, API Keys,
+Secure Token, IAM, and supporting APIs. It also creates the Artifact Registry
+repository, Terraform deployment service account, GitHub Workload Identity
+Federation trust, shared Identity Platform tenants, Firebase web apps, and KMS
+signing keys.
 
-```bash
-gcloud auth application-default login
-terraform -chdir=infrastructure/bootstrap init \
-  -backend-config="bucket=YOUR_TF_STATE_BUCKET" \
-  -backend-config=backend.hcl
-terraform -chdir=infrastructure/bootstrap apply
+```powershell
+.\infrastructure\bootstrap\initialize.ps1 `
+  -ProjectId YOUR_GCP_PROJECT `
+  -StateBucketName YOUR_TF_STATE_BUCKET `
+  -GitHubRepository OWNER/REPOSITORY
 ```
 
-Reapply bootstrap before using the corrected auth infrastructure so the new
-APIs and deployment roles exist. The checked-in `terraform.tfvars` is loaded
-automatically. Initialization is only required for a new checkout or after a
-backend/provider change.
+The script reads the Google-issued OAuth Web Client ID and secret interactively
+after Terraform creates the target tenant. It sends the secret directly to the
+Identity Platform Google provider, which is the only component that needs it.
+It is not stored in Terraform state or passed to runtime application code. The
+script displays the Firebase handler redirect URI that must be registered on
+the OAuth client and verifies the enabled provider after configuration.
 
 Bootstrap is the only root that may modify project IAM. It creates the runtime
 service accounts and grants their project-level permissions. GitHub Actions is
@@ -117,9 +113,10 @@ If Firebase or Identity Platform was enabled previously, import the existing
 project resources into this root instead of attempting to recreate them. Google
 sign-in is not configured by Terraform because the Identity Platform provider
 resource requires an OAuth client secret, which would be recorded in state.
-Configure Google as an identity provider separately for each tenant through a
-secret-bearing administrative process. Do not pass its client secret to
-Terraform.
+`bootstrap/initialize.ps1` configures it through the Identity Platform Admin
+API instead. Google issues the Web Client ID and secret; a randomly generated
+secret is not valid. Re-run the script with `-Environment production` only
+after production browser-auth prerequisites are complete.
 
 ## Environment Setup
 
@@ -130,7 +127,7 @@ variables:
 - `GCP_REGION`: Artifact Registry, Cloud Run, and KMS region.
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`: bootstrap output.
 - `GCP_SERVICE_ACCOUNT`: bootstrap Terraform service-account email.
-- `TF_STATE_BUCKET`: manually created state bucket.
+- `TF_STATE_BUCKET`: state bucket created by `bootstrap/initialize.ps1`.
 - `WEB_ORIGIN`: production only. Set it to `https://theorymancer.com`; the
   development API automatically uses the generated web Cloud Run URL from
   Terraform state.

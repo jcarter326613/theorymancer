@@ -1,43 +1,30 @@
 import { createHash } from "node:crypto"
 
 import { KeyManagementServiceClient } from "@google-cloud/kms"
-import { applicationDefault, getApps, initializeApp } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
 import { OAuth2Client } from "google-auth-library"
 import { exportJWK, importSPKI } from "jose"
 import type { JWK } from "jose"
 
 import type {
     AccessTokenClaims,
+    AuthStore,
     IdentityVerifier,
     ServiceIdentityVerifier,
     TokenIssuer,
 } from "./auth-types.js"
 
-export class FirebaseIdentityVerifier implements IdentityVerifier {
+export class WebSessionIdentityVerifier implements IdentityVerifier {
     public constructor(
-        projectId: string,
-        private readonly tenantId: string,
-    ) {
-        if (getApps().length === 0) {
-            initializeApp({ credential: applicationDefault(), projectId })
-        }
-    }
+        private readonly store: AuthStore,
+        private readonly now: () => number = Date.now,
+    ) {}
 
-    public async verify(
-        token: string,
-    ): Promise<{ uid: string; email?: string }> {
-        const decoded = await getAuth()
-            .tenantManager()
-            .authForTenant(this.tenantId)
-            .verifyIdToken(token)
-        if (decoded.firebase.tenant !== this.tenantId) {
-            throw new Error("Unexpected Firebase tenant")
+    public async verify(token: string): Promise<{ uid: string; webSession: import("./auth-types.js").WebSession }> {
+        const session = await this.store.getWebSession(createHash("sha256").update(token).digest("base64url"))
+        if (session === undefined || session.revokedAt !== undefined || session.expiresAt <= this.now()) {
+            throw new Error("Invalid web session")
         }
-        return {
-            uid: decoded.uid,
-            ...(decoded.email === undefined ? {} : { email: decoded.email }),
-        }
+        return { uid: session.uid, webSession: session }
     }
 }
 

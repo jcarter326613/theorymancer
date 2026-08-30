@@ -63,8 +63,7 @@ GCP project while remaining logically isolated:
 
 - Terraform has independent `development` and `production` root modules and
   remote-state prefixes.
-- A `shared` Terraform root owns project-global Identity Platform and Firebase
-  configuration plus environment-specific signing keys.
+- A `shared` Terraform root owns environment-specific signing keys.
 - Each environment has distinct Cloud Run services, runtime service accounts,
   named Firestore databases, and Cloud Storage buckets.
 - The manually applied `bootstrap` root owns runtime service accounts and all
@@ -73,9 +72,7 @@ GCP project while remaining logically isolated:
 - Every environment deployment first plans the project-global `shared` root. A
   shared diff requires production approval before its reviewed plan is applied;
   the environment deployment runs only after that apply succeeds or the shared
-  plan is a no-op. The first development deployment performs a second, likewise
-  protected shared reconciliation after Cloud Run generates the development web
-  URL needed by Identity Platform.
+  plan is a no-op.
 - GitHub Environments separate development from production deployment
   permissions. Production should require reviewers before it is used by
   customers.
@@ -96,15 +93,14 @@ integration testing when required.
 
 ## Persistence
 
-Firestore is the initial system of record for accounts, external identities,
+Firestore is the initial system of record for accounts, password hashes, opaque web sessions,
 refresh sessions, game grants, and authorization state. Because development and
 production currently share a GCP project, each uses a separate named Firestore
 Native database: `theorymancer-development` and `theorymancer-production`.
 Production has deletion protection and an abandon-on-destroy policy.
 
 Only central API service identities receive `roles/datastore.user`. Browser and
-desktop clients must not access Firestore directly; Firebase client
-configuration does not grant database access, and no permissive Firestore rules
+desktop clients must not access Firestore directly; no permissive Firestore rules
 are deployed. Each named database has an explicit deny-all client ruleset. Data
 access is server IAM only. The Guild Wars 2 service has no Firestore role.
 
@@ -118,12 +114,11 @@ analytics requirements justify its fixed operational cost.
 
 ## Signing And Identity
 
-Identity Platform is configured once at project scope with separate development
-and production tenants and Firebase web apps. Google sign-in requires an OAuth
-client secret, so its tenant provider configuration is intentionally not stored
-in Terraform state and must be configured through a separate secret-bearing
-administrative process. Firebase web app API keys are public client
-configuration, not OAuth client secrets.
+The central API owns first-party email/password authentication. Passwords are
+stored only as salted scrypt hashes. Browser authentication uses opaque,
+server-stored sessions in Secure, HttpOnly, SameSite=None cookies; state-changing
+cookie requests require the configured web origin and a rotating CSRF token.
+Accounts self-register as `user` and receive game grants only through an admin.
 
 Each environment has a software-backed Cloud KMS asymmetric
 `RSA_SIGN_PKCS1_2048_SHA256` key and a pinned version. Only that environment's

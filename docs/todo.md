@@ -24,8 +24,12 @@
 
 ## Deployment Prerequisites
 
-- Configure the Google provider in each Identity Platform tenant using the
-  required secret-bearing administrative process.
+- Create Google-issued OAuth Web Client credentials and configure the consent
+  screen/test users when `infrastructure/bootstrap/initialize.ps1` displays the
+  Firebase handler redirect URI.
+- Run `infrastructure/bootstrap/initialize.ps1 -Environment production` after
+  production DNS and edge routing are ready to enable the production tenant's
+  Google provider.
 - Bootstrap the first platform administrator after the operator's initial
   website sign-in, using the documented Firestore procedure.
 
