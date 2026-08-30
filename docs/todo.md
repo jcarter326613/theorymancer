@@ -26,8 +26,6 @@
 
 - Configure the Google provider in each Identity Platform tenant using the
   required secret-bearing administrative process.
-- Create and pin the IP-hash Secret Manager payload version in each
-  environment.
 - Bootstrap the first platform administrator after the operator's initial
   website sign-in, using the documented Firestore procedure.
 - Complete the documented staged development-origin bootstrap: deploy a web

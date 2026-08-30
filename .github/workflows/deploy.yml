@@ -127,6 +127,7 @@ jobs:
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
             GCP_REGION: ${{ vars.GCP_REGION }}
             TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+            IP_HASH_SECRET_VERSION: ${{ vars.IP_HASH_SECRET_VERSION || '1' }}
         steps:
             - uses: actions/checkout@v4
 
@@ -179,6 +180,52 @@ jobs:
                   -backend-config="bucket=${TF_STATE_BUCKET}"
                   -backend-config=backend.hcl
 
+            - name: Ensure IP-hash secret version
+              working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
+              run: |
+                  set -euo pipefail
+                  secret_id="theorymancer-${ENVIRONMENT}-ip-hash"
+
+                  if ! gcloud secrets describe "$secret_id" --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
+                    terraform apply -input=false -auto-approve \
+                      -target=google_secret_manager_secret.ip_hash \
+                      -var="project_id=${GCP_PROJECT_ID}" \
+                      -var="region=${GCP_REGION}" \
+                      -var="terraform_state_bucket=${TF_STATE_BUCKET}" \
+                      -var="web_origin=${{ vars.WEB_ORIGIN }}" \
+                      -var="ip_hash_secret_version=${IP_HASH_SECRET_VERSION}" \
+                      -var="web_image=${WEB_IMAGE}" \
+                      -var="api_image=${API_IMAGE}" \
+                      -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
+                  fi
+
+                  version_state="$(gcloud secrets versions describe "$IP_HASH_SECRET_VERSION" \
+                    --secret="$secret_id" --project="$GCP_PROJECT_ID" --format='value(state)' 2>/dev/null || true)"
+                  if [ "$version_state" = "ENABLED" ]; then
+                    exit 0
+                  fi
+                  if [ -n "$version_state" ]; then
+                    echo "The configured IP_HASH_SECRET_VERSION ($IP_HASH_SECRET_VERSION) is not enabled for $secret_id." >&2
+                    exit 1
+                  fi
+
+                  latest_version="$(gcloud secrets versions list "$secret_id" --project="$GCP_PROJECT_ID" \
+                    --sort-by='~createTime' --limit=1 --format='value(name)')"
+                  if [ -n "$latest_version" ]; then
+                    latest_version_number="${latest_version##*/}"
+                    expected_version="$((latest_version_number + 1))"
+                    if [ "$IP_HASH_SECRET_VERSION" != "$expected_version" ]; then
+                      echo "The configured IP_HASH_SECRET_VERSION ($IP_HASH_SECRET_VERSION) does not exist for $secret_id and is not the next version ($expected_version)." >&2
+                      exit 1
+                    fi
+                  fi
+
+                  # Send the generated value directly to Secret Manager; it never enters Terraform state.
+                  openssl rand -base64 32 | gcloud secrets versions add "$secret_id" \
+                    --project="$GCP_PROJECT_ID" --data-file=-
+                  gcloud secrets versions describe "$IP_HASH_SECRET_VERSION" \
+                    --secret="$secret_id" --project="$GCP_PROJECT_ID" >/dev/null
+
             - name: Apply infrastructure
               working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
               run: >-
@@ -187,7 +234,7 @@ jobs:
                   -var="region=${GCP_REGION}"
                   -var="terraform_state_bucket=${TF_STATE_BUCKET}"
                   -var="web_origin=${{ vars.WEB_ORIGIN }}"
-                  -var="ip_hash_secret_version=${{ vars.IP_HASH_SECRET_VERSION || '1' }}"
+                  -var="ip_hash_secret_version=${IP_HASH_SECRET_VERSION}"
                   -var="web_image=${WEB_IMAGE}"
                   -var="api_image=${API_IMAGE}"
                   -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"

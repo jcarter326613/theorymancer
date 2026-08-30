@@ -151,30 +151,17 @@ Production browser authentication also requires the `theorymancer.com` DNS and
 edge routes described in `docs/architecture.md`; the generated production
 `run.app` web URL is not an interim authenticated production origin.
 
-Each environment creates only an empty Secret Manager container. Before the
-first full deployment, target that container, then add version `1` out of band.
-Supply the normal required Terraform variables to the targeted apply; placeholder
-Cloud Run image strings are sufficient because no service is targeted.
+The deployment workflow automatically creates each environment's IP-hash Secret
+Manager container through Terraform, then creates its first enabled version when
+none exists. The generated value is streamed directly to Secret Manager and
+never enters Terraform variables, state, outputs, GitHub variables, or workflow
+logs.
 
-```bash
-terraform -chdir=infrastructure/environments/development init \
-  -backend-config="bucket=YOUR_TF_STATE_BUCKET" \
-  -backend-config=backend.hcl
-terraform -chdir=infrastructure/environments/development apply \
-  -target=google_secret_manager_secret.ip_hash \
-  -var="project_id=YOUR_GCP_PROJECT" \
-  -var="terraform_state_bucket=YOUR_TF_STATE_BUCKET" \
-  -var="web_origin=YOUR_WEB_ORIGIN" \
-  -var="web_image=unused" -var="api_image=unused" \
-  -var="guild_wars_2_api_image=unused"
-openssl rand -base64 32 | gcloud secrets versions add \
-  theorymancer-development-ip-hash --project=YOUR_GCP_PROJECT --data-file=-
-```
-
-Repeat with `production` and `theorymancer-production-ip-hash`. Secret payloads
-must never be placed in `.tfvars`, Terraform variables, outputs, or state. After
-the version exists, run a normal apply without `-target`; the deployment
-workflow does this automatically.
+`IP_HASH_SECRET_VERSION` pins the version mounted by Cloud Run. To rotate it,
+set the environment variable to the next numeric version; the next deployment
+creates that version with a new random value before applying the runtime
+configuration. A missing skipped version or a disabled configured version fails
+the deployment rather than selecting a different value.
 
 After the first operator signs in to the website, bootstrap that account as the
 platform administrator with an operator credential. Replace the environment
