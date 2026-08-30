@@ -40,6 +40,8 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/environments/development
@@ -76,6 +78,8 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/shared
@@ -127,6 +131,8 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/shared
@@ -208,6 +214,8 @@ jobs:
                   printf 'WEB_IMAGE=%s\nAPI_IMAGE=%s\nGUILD_WARS_2_API_IMAGE=%s\n' "$WEB_IMAGE" "$API_IMAGE" "$GUILD_WARS_2_API_IMAGE" >> "$GITHUB_ENV"
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
@@ -354,6 +362,8 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/shared
@@ -407,6 +417,8 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_wrapper: false
 
             - name: Initialize Terraform
               working-directory: infrastructure/shared
