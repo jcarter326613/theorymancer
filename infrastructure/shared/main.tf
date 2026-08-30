@@ -43,7 +43,7 @@ resource "google_identity_platform_tenant" "this" {
   for_each = local.environments
 
   project               = var.project_id
-  display_name          = "Theorymancer ${each.key}"
+  display_name          = "TM-${each.key}"
   allow_password_signup = false
   disable_auth          = false
 
