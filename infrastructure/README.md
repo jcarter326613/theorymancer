@@ -100,7 +100,8 @@ Every `Deploy` workflow first plans this root. If that plan has changes, the
 saved plan before the requested environment deployment begins. A no-op shared
 plan proceeds directly to the environment deployment. The standalone `Shared
 infrastructure` workflow is manual-only for operator recovery and uses the
-same plan-before-approval flow.
+same plan-before-approval flow. Both workflows read the generated development
+web URL from development Terraform state for Identity Platform configuration.
 
 ```bash
 terraform -chdir=infrastructure/shared init \
@@ -109,7 +110,7 @@ terraform -chdir=infrastructure/shared init \
 terraform -chdir=infrastructure/shared apply \
   -var="project_id=YOUR_GCP_PROJECT" \
   -var="region=us-east1" \
-  -var="development_web_origin=https://YOUR_DEVELOPMENT_WEB_RUN_APP_HOST"
+  -var="development_web_origin=$(terraform -chdir=infrastructure/environments/development output -raw web_url)"
 ```
 
 If Firebase or Identity Platform was enabled previously, import the existing
@@ -130,12 +131,10 @@ variables:
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`: bootstrap output.
 - `GCP_SERVICE_ACCOUNT`: bootstrap Terraform service-account email.
 - `TF_STATE_BUCKET`: manually created state bucket.
-- `WEB_ORIGIN`: exact allowed browser origin. Use `https://theorymancer.com` in
-  production and the deployed web `run.app` origin in development.
+- `WEB_ORIGIN`: production only. Set it to `https://theorymancer.com`; the
+  development API automatically uses the generated web Cloud Run URL from
+  Terraform state.
 - `IP_HASH_SECRET_VERSION`: pinned Secret Manager version, initially `1`.
-- `DEVELOPMENT_WEB_ORIGIN`: repository variable containing the development
-  `run.app` origin. The pre-approval shared plan must receive the same value as
-  the protected shared apply, so do not define environment-specific overrides.
 
 Protect the production Environment with required reviewers.
 
@@ -150,6 +149,12 @@ Workload Identity bindings.
 Production browser authentication also requires the `theorymancer.com` DNS and
 edge routes described in `docs/architecture.md`; the generated production
 `run.app` web URL is not an interim authenticated production origin.
+
+On the first development deployment, the workflow uses the temporary
+`https://bootstrap.invalid` API origin only long enough to create the web
+service and discover its generated URL. It then reapplies development with that
+URL and plans the corresponding shared Identity Platform update. The shared
+apply retains its production approval requirement.
 
 The deployment workflow automatically creates each environment's IP-hash Secret
 Manager container through Terraform, then creates its first enabled version when

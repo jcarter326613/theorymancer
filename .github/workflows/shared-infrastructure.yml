@@ -22,7 +22,6 @@ jobs:
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
             GCP_REGION: ${{ vars.GCP_REGION }}
             TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-            DEVELOPMENT_WEB_ORIGIN: ${{ vars.DEVELOPMENT_WEB_ORIGIN }}
         steps:
             - uses: actions/checkout@v4
 
@@ -32,6 +31,19 @@ jobs:
                   service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
             - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize development Terraform
+              working-directory: infrastructure/environments/development
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - name: Read deployed development web URL
+              working-directory: infrastructure/environments/development
+              run: |
+                  web_origin="$(terraform output -raw web_url 2>/dev/null || true)"
+                  echo "DEVELOPMENT_WEB_ORIGIN=$web_origin" >> "$GITHUB_ENV"
 
             - name: Initialize Terraform
               working-directory: infrastructure/shared

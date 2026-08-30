@@ -23,8 +23,41 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    resolve-development-web-origin:
+        name: Resolve development web origin
+        runs-on: ubuntu-latest
+        environment: development
+        outputs:
+            web_origin: ${{ steps.resolve.outputs.web_origin }}
+        env:
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/environments/development
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - id: resolve
+              name: Read deployed web URL
+              working-directory: infrastructure/environments/development
+              run: |
+                  web_origin="$(terraform output -raw web_url 2>/dev/null || true)"
+                  echo "web_origin=$web_origin" >> "$GITHUB_OUTPUT"
+
     shared-plan:
         name: Plan shared infrastructure
+        needs: resolve-development-web-origin
         runs-on: ubuntu-latest
         environment: development
         outputs:
@@ -33,7 +66,7 @@ jobs:
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
             GCP_REGION: ${{ vars.GCP_REGION }}
             TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-            DEVELOPMENT_WEB_ORIGIN: ${{ vars.DEVELOPMENT_WEB_ORIGIN }}
+            DEVELOPMENT_WEB_ORIGIN: ${{ needs.resolve-development-web-origin.outputs.web_origin }}
         steps:
             - uses: actions/checkout@v4
 
@@ -122,6 +155,9 @@ jobs:
             (needs.shared-apply.result == 'success' || needs.shared-apply.result == 'skipped')
         runs-on: ubuntu-latest
         environment: ${{ inputs.environment || 'development' }}
+        outputs:
+            development_web_origin: ${{ steps.deployed-development-web-origin.outputs.web_origin }}
+            initial_development_origin: ${{ steps.resolve-web-origin.outputs.initial_development_origin }}
         env:
             ENVIRONMENT: ${{ inputs.environment || 'development' }}
             GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -180,6 +216,23 @@ jobs:
                   -backend-config="bucket=${TF_STATE_BUCKET}"
                   -backend-config=backend.hcl
 
+            - id: resolve-web-origin
+              name: Resolve API web origin
+              run: |
+                  if [ "$ENVIRONMENT" = "development" ]; then
+                    web_origin="${{ needs.resolve-development-web-origin.outputs.web_origin }}"
+                    if [ -z "$web_origin" ]; then
+                      web_origin="https://bootstrap.invalid"
+                      echo "initial_development_origin=true" >> "$GITHUB_OUTPUT"
+                    else
+                      echo "initial_development_origin=false" >> "$GITHUB_OUTPUT"
+                    fi
+                  else
+                    web_origin="${{ vars.WEB_ORIGIN }}"
+                    echo "initial_development_origin=false" >> "$GITHUB_OUTPUT"
+                  fi
+                  echo "WEB_ORIGIN=$web_origin" >> "$GITHUB_ENV"
+
             - name: Ensure IP-hash secret version
               working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
               run: |
@@ -192,7 +245,7 @@ jobs:
                       -var="project_id=${GCP_PROJECT_ID}" \
                       -var="region=${GCP_REGION}" \
                       -var="terraform_state_bucket=${TF_STATE_BUCKET}" \
-                      -var="web_origin=${{ vars.WEB_ORIGIN }}" \
+                      -var="web_origin=${WEB_ORIGIN}" \
                       -var="ip_hash_secret_version=${IP_HASH_SECRET_VERSION}" \
                       -var="web_image=${WEB_IMAGE}" \
                       -var="api_image=${API_IMAGE}" \
@@ -233,11 +286,37 @@ jobs:
                   -var="project_id=${GCP_PROJECT_ID}"
                   -var="region=${GCP_REGION}"
                   -var="terraform_state_bucket=${TF_STATE_BUCKET}"
-                  -var="web_origin=${{ vars.WEB_ORIGIN }}"
+                  -var="web_origin=${WEB_ORIGIN}"
                   -var="ip_hash_secret_version=${IP_HASH_SECRET_VERSION}"
                   -var="web_image=${WEB_IMAGE}"
                   -var="api_image=${API_IMAGE}"
                   -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
+
+            - id: deployed-development-web-origin
+              name: Read deployed development web URL
+              if: env.ENVIRONMENT == 'development'
+              working-directory: infrastructure/environments/development
+              run: echo "web_origin=$(terraform output -raw web_url)" >> "$GITHUB_OUTPUT"
+
+            - name: Finalize initial development API origin
+              if: steps.resolve-web-origin.outputs.initial_development_origin == 'true'
+              working-directory: infrastructure/environments/development
+              run: |
+                  set -euo pipefail
+                  web_origin="${{ steps.deployed-development-web-origin.outputs.web_origin }}"
+                  if [ -z "$web_origin" ]; then
+                    echo "The initial development deployment did not produce a web URL." >&2
+                    exit 1
+                  fi
+                  terraform apply -input=false -auto-approve \
+                    -var="project_id=${GCP_PROJECT_ID}" \
+                    -var="region=${GCP_REGION}" \
+                    -var="terraform_state_bucket=${TF_STATE_BUCKET}" \
+                    -var="web_origin=${web_origin}" \
+                    -var="ip_hash_secret_version=${IP_HASH_SECRET_VERSION}" \
+                    -var="web_image=${WEB_IMAGE}" \
+                    -var="api_image=${API_IMAGE}" \
+                    -var="guild_wars_2_api_image=${GUILD_WARS_2_API_IMAGE}"
 
             - name: Smoke test deployed services
               working-directory: infrastructure/environments/${{ inputs.environment || 'development' }}
@@ -250,3 +329,94 @@ jobs:
                   curl --fail --retry 5 --retry-delay 3 "$API_URL/health"
                   curl --fail --retry 5 --retry-delay 3 "$API_URL/.well-known/jwks.json"
                   curl --fail --retry 5 --retry-delay 3 "$GUILD_WARS_2_API_URL/health"
+
+    shared-development-origin-plan:
+        name: Plan discovered development origin
+        needs: deploy
+        if: needs.deploy.outputs.initial_development_origin == 'true'
+        runs-on: ubuntu-latest
+        environment: development
+        outputs:
+            has_changes: ${{ steps.plan.outputs.has_changes }}
+        env:
+            GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+            GCP_REGION: ${{ vars.GCP_REGION }}
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+            DEVELOPMENT_WEB_ORIGIN: ${{ needs.deploy.outputs.development_web_origin }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - id: plan
+              name: Plan shared infrastructure
+              working-directory: infrastructure/shared
+              run: |
+                  set +e
+                  terraform plan -input=false -detailed-exitcode -out=tfplan \
+                    -var="project_id=${GCP_PROJECT_ID}" \
+                    -var="region=${GCP_REGION}" \
+                    -var="development_web_origin=${DEVELOPMENT_WEB_ORIGIN}"
+                  status=$?
+                  if [ "$status" -eq 1 ]; then
+                    exit 1
+                  fi
+                  echo "has_changes=$([ "$status" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+                  if [ "$status" -eq 2 ]; then
+                    terraform show -no-color tfplan | tee -a "$GITHUB_STEP_SUMMARY"
+                  fi
+
+            - name: Upload shared plan
+              if: steps.plan.outputs.has_changes == 'true'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: discovered-development-origin-plan
+                  path: infrastructure/shared/tfplan
+                  if-no-files-found: error
+
+    shared-development-origin-apply:
+        name: Apply discovered development origin
+        needs: shared-development-origin-plan
+        if: needs.shared-development-origin-plan.outputs.has_changes == 'true'
+        runs-on: ubuntu-latest
+        environment: production
+        env:
+            TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+                  service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+            - uses: hashicorp/setup-terraform@v3
+
+            - name: Initialize Terraform
+              working-directory: infrastructure/shared
+              run: >-
+                  terraform init -input=false
+                  -backend-config="bucket=${TF_STATE_BUCKET}"
+                  -backend-config=backend.hcl
+
+            - name: Download reviewed shared plan
+              uses: actions/download-artifact@v4
+              with:
+                  name: discovered-development-origin-plan
+                  path: infrastructure/shared
+
+            - name: Apply shared infrastructure
+              working-directory: infrastructure/shared
+              run: terraform apply -input=false -auto-approve tfplan

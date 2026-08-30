@@ -38,10 +38,15 @@ variable "firestore_location" {
 variable "web_origin" {
   description = "Browser origin allowed by the central API."
   type        = string
+
+  validation {
+    condition     = can(regex("^https://[^/?#]+$", var.web_origin))
+    error_message = "web_origin must be an HTTPS origin without a path, query, fragment, or trailing slash."
+  }
 }
 
 variable "ip_hash_secret_version" {
-  description = "Pinned, out-of-band Secret Manager version containing the IP hash secret."
+  description = "Pinned workflow-managed Secret Manager version containing the IP hash secret."
   type        = string
   default     = "1"
 }

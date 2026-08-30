@@ -28,9 +28,6 @@
   required secret-bearing administrative process.
 - Bootstrap the first platform administrator after the operator's initial
   website sign-in, using the documented Firestore procedure.
-- Complete the documented staged development-origin bootstrap: deploy a web
-  service, add its generated `run.app` origin to Identity Platform through the
-  shared root, then reapply the development environment with that origin.
 
 ## Integration Coverage
 

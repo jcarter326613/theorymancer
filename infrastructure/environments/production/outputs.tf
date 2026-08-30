@@ -29,6 +29,6 @@ output "firestore_database_id" {
 }
 
 output "ip_hash_secret_id" {
-  description = "Secret Manager container that requires an out-of-band payload version."
+  description = "Secret Manager container with a workflow-managed payload version."
   value       = google_secret_manager_secret.ip_hash.secret_id
 }

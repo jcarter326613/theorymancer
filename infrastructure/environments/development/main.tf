@@ -160,7 +160,7 @@ module "api" {
     AUTH_ISSUER                                = local.auth_issuer
     GW2_AUTH_AUDIENCE                          = local.gw2_auth_audience
     AUTH_SIGNING_KEY_VERSION                   = local.signing_key_version
-    AUTH_SIGNING_KEY_ID                        = local.signing_key_version
+    AUTH_SIGNING_KEY_ID                        = local.signing_key_id
     WEB_ORIGIN                                 = var.web_origin
     INTERNAL_FAILURE_REPORTER_SERVICE_ACCOUNTS = local.gw2_service_account
     UPLOADS_BUCKET                             = google_storage_bucket.uploads.name

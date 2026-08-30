@@ -73,7 +73,9 @@ GCP project while remaining logically isolated:
 - Every environment deployment first plans the project-global `shared` root. A
   shared diff requires production approval before its reviewed plan is applied;
   the environment deployment runs only after that apply succeeds or the shared
-  plan is a no-op.
+  plan is a no-op. The first development deployment performs a second, likewise
+  protected shared reconciliation after Cloud Run generates the development web
+  URL needed by Identity Platform.
 - GitHub Environments separate development from production deployment
   permissions. Production should require reviewers before it is used by
   customers.
