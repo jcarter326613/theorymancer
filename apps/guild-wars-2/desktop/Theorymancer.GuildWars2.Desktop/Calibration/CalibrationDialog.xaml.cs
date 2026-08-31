@@ -74,8 +74,7 @@ public partial class CalibrationDialog : Window
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
             var capture = new VisibleScreenRegionCapture(_gameWindow, region.Crop);
             var frame = await capture.CaptureAsync(CancellationToken.None);
-            var words = await WindowsHudOcrEngine.CreateEnglish().RecognizeWordsAsync(frame, CancellationToken.None);
-            var detection = SkillBarLayoutDetector.Detect(frame, words);
+            var detection = SkillBarLayoutDetector.Detect(frame, []);
             var matches = detection.Layout is { } detectedLayout
                 ? await new SkillBarIconMatcher(_referenceIcons).MatchAsync(frame, detectedLayout, _buildCandidates, CancellationToken.None)
                 : [];

@@ -46,7 +46,24 @@ public static class IconTemplateMatcher
         int skillId)
     {
         var template = LoadTemplate(referenceIconPath);
-        return new IconTemplateMatch(name, skillId, bounds, GetNormalizedCorrelation(frame, bounds, template));
+        var minimumDimension = Math.Min(bounds.Width, bounds.Height);
+        var minimumSize = Math.Max(20, (int)Math.Round(minimumDimension * 0.85));
+        var maximumSize = Math.Min(
+            Math.Min(frame.Width, frame.Height),
+            (int)Math.Round(minimumDimension * 1.05));
+        var padding = Math.Max(2, (int)Math.Round(minimumDimension * 0.1));
+        var sizeStep = Math.Max(1, minimumSize / 16);
+        var positionStep = Math.Max(1, minimumSize / 12);
+        var best = FindBestCandidateWithinBounds(
+            frame,
+            template,
+            minimumSize,
+            maximumSize,
+            sizeStep,
+            positionStep,
+            bounds,
+            padding);
+        return new IconTemplateMatch(name, skillId, best.Bounds, best.Score);
     }
 
     private static Candidate FindBestCandidate(
@@ -81,6 +98,40 @@ public static class IconTemplateMatcher
         }
 
         return best ?? throw new InvalidOperationException("The search range must contain at least one icon candidate.");
+    }
+
+    private static Candidate FindBestCandidateWithinBounds(
+        CapturedFrame frame,
+        ReferenceTemplate template,
+        int minimumSize,
+        int maximumSize,
+        int sizeStep,
+        int positionStep,
+        ScreenBounds bounds,
+        int padding)
+    {
+        Candidate? best = null;
+        for (var size = minimumSize; size <= maximumSize; size += sizeStep)
+        {
+            var minimumX = Math.Max(0, bounds.X - padding);
+            var maximumX = Math.Min(frame.Width - size, bounds.Right - size + padding);
+            var minimumY = Math.Max(0, bounds.Y - padding);
+            var maximumY = Math.Min(frame.Height - size, bounds.Bottom - size + padding);
+            for (var y = minimumY; y <= maximumY; y += positionStep)
+            {
+                for (var x = minimumX; x <= maximumX; x += positionStep)
+                {
+                    var candidateBounds = new ScreenBounds(x, y, size, size);
+                    var score = GetNormalizedCorrelation(frame, candidateBounds, template);
+                    if (best is null || score > best.Score)
+                    {
+                        best = new Candidate(candidateBounds, score);
+                    }
+                }
+            }
+        }
+
+        return best ?? throw new InvalidOperationException("The slot search range must contain at least one icon candidate.");
     }
 
     private static double GetNormalizedCorrelation(CapturedFrame frame, ScreenBounds bounds, ReferenceTemplate template)

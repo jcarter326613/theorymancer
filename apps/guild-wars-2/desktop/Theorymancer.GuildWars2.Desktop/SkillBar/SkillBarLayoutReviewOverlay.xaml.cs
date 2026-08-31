@@ -58,14 +58,6 @@ public partial class SkillBarLayoutReviewOverlay : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void ShowOcrEvidence_Changed(object sender, RoutedEventArgs e)
-    {
-        if (IsLoaded)
-        {
-            RenderRegions();
-        }
-    }
-
     private void RenderRegions()
     {
         OverlayCanvas.Children.Clear();
@@ -82,11 +74,6 @@ public partial class SkillBarLayoutReviewOverlay : Window
 
         var skillBarBounds = _skillBarRegion.Crop.ToScreenBounds(_clientBounds);
         AddVisual(skillBarBounds, "Skill bar", Brushes.DeepSkyBlue, 34);
-        if (ShowOcrEvidenceCheckBox.IsChecked == true)
-        {
-            RenderOcrEvidence(skillBarBounds);
-        }
-
         if (_detection.Layout is null)
         {
             return;
@@ -113,38 +100,10 @@ public partial class SkillBarLayoutReviewOverlay : Window
         }
     }
 
-    private void RenderOcrEvidence(ScreenBounds skillBarBounds)
-    {
-        foreach (var word in _detection.DebugInfo.RecognizedWords)
-        {
-            AddVisual(ToScreenBounds(skillBarBounds, word), word.Text, Brushes.Cyan, 24);
-        }
-
-        foreach (var word in _detection.DebugInfo.SelectedLabels)
-        {
-            AddVisual(ToScreenBounds(skillBarBounds, word), $"Selected: {word.Text}", Brushes.MediumPurple, 48);
-        }
-    }
-
-    private static ScreenBounds ToScreenBounds(ScreenBounds skillBarBounds, HudOcrWord word) => new(
-        skillBarBounds.X + (int)Math.Floor(word.X),
-        skillBarBounds.Y + (int)Math.Floor(word.Y),
-        Math.Max(1, (int)Math.Ceiling(word.Width)),
-        Math.Max(1, (int)Math.Ceiling(word.Height)));
-
     private static string FormatDiagnostics(SkillBarLayoutDebugInfo debugInfo)
     {
-        var selectedLabels = debugInfo.SelectedLabels.Count == 0
-            ? "none"
-            : string.Join(", ", debugInfo.SelectedLabels.Select(word => $"{word.Text}@{word.X:F0},{word.Y:F0}"));
-        var words = debugInfo.RecognizedWords.Count == 0
-            ? "none"
-            : string.Join(", ", debugInfo.RecognizedWords.Take(12).Select(word => $"{word.Text}@{word.X:F0},{word.Y:F0}"));
-        var remainingWordCount = debugInfo.RecognizedWords.Count - Math.Min(12, debugInfo.RecognizedWords.Count);
         return
-            $"OCR words ({debugInfo.RecognizedWords.Count}): {words}{(remainingWordCount > 0 ? $", +{remainingWordCount} more" : string.Empty)}\n" +
-            $"Selected labels: {selectedLabels}\n" +
-            $"Spacing: {FormatNumber(debugInfo.LabelSpacing)}; label confidence: {FormatNumber(debugInfo.LabelConfidence)}\n" +
+            $"Group spacing: {FormatNumber(debugInfo.LabelSpacing)}; visual confidence: {FormatNumber(debugInfo.LabelConfidence)}\n" +
             $"Square: {debugInfo.SquareSize?.ToString() ?? "n/a"}; x offset: {debugInfo.HorizontalOffset?.ToString() ?? "n/a"}; top: {debugInfo.SquareTop?.ToString() ?? "n/a"}; border evidence: {FormatNumber(debugInfo.BorderEvidence)}";
     }
 
