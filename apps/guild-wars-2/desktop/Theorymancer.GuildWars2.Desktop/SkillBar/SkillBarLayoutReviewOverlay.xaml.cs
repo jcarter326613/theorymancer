@@ -103,8 +103,8 @@ public partial class SkillBarLayoutReviewOverlay : Window
     private static string FormatDiagnostics(SkillBarLayoutDebugInfo debugInfo)
     {
         return
-            $"Group spacing: {FormatNumber(debugInfo.LabelSpacing)}; visual confidence: {FormatNumber(debugInfo.LabelConfidence)}\n" +
-            $"Square: {debugInfo.SquareSize?.ToString() ?? "n/a"}; x offset: {debugInfo.HorizontalOffset?.ToString() ?? "n/a"}; top: {debugInfo.SquareTop?.ToString() ?? "n/a"}; border evidence: {FormatNumber(debugInfo.BorderEvidence)}";
+            $"Anchor skill: {debugInfo.AnchorSkillId?.ToString() ?? "n/a"}; anchor score: {FormatNumber(debugInfo.AnchorScore)}\n" +
+            $"Refined icon size: {debugInfo.IconSize?.ToString() ?? "n/a"}; x: {debugInfo.AnchorX?.ToString() ?? "n/a"}; y: {debugInfo.AnchorY?.ToString() ?? "n/a"}; spacing: {FormatNumber(debugInfo.SlotSpacing)}; match score: {FormatNumber(debugInfo.MatchScore)}";
     }
 
     private static string FormatNumber(double? value) => value is null ? "n/a" : value.Value.ToString("F3");

@@ -74,7 +74,8 @@ public partial class CalibrationDialog : Window
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
             var capture = new VisibleScreenRegionCapture(_gameWindow, region.Crop);
             var frame = await capture.CaptureAsync(CancellationToken.None);
-            var detection = SkillBarLayoutDetector.Detect(frame, []);
+            var templates = await LoadSkillBarTemplatesAsync(CancellationToken.None);
+            var detection = SkillBarLayoutDetector.Detect(frame, templates);
             var matches = detection.Layout is { } detectedLayout
                 ? await new SkillBarIconMatcher(_referenceIcons).MatchAsync(frame, detectedLayout, _buildCandidates, CancellationToken.None)
                 : [];
@@ -160,6 +161,27 @@ public partial class CalibrationDialog : Window
         }
 
         return regions;
+    }
+
+    private async Task<IReadOnlyList<SkillBarIconTemplate>> LoadSkillBarTemplatesAsync(CancellationToken cancellationToken)
+    {
+        var templates = new List<SkillBarIconTemplate>();
+        foreach (var (kind, skillIds) in _buildCandidates.SkillIdsBySlot)
+        {
+            foreach (var skillId in skillIds)
+            {
+                var skill = _referenceIcons.FindSkill(skillId);
+                if (skill is null)
+                {
+                    continue;
+                }
+
+                var path = await _referenceIcons.GetSkillPathAsync(skillId, cancellationToken);
+                templates.Add(new SkillBarIconTemplate(kind, skill.Name, skill.SkillId, path));
+            }
+        }
+
+        return templates;
     }
 
     private void RefreshPreviewOverlay()

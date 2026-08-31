@@ -11,7 +11,7 @@ public sealed record SkillBarSlotMatch(
 
 public sealed class SkillBarIconMatcher
 {
-    private const double MinimumScore = 0.80;
+    private const double MinimumScore = 0.60;
     private const double MinimumMargin = 0.035;
     private readonly ReferenceIcons _referenceIcons;
 

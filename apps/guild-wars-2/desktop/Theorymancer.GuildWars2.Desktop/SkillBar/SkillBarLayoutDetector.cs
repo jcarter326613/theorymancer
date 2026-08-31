@@ -2,15 +2,20 @@ using Theorymancer.GuildWars2.Desktop.Capture;
 
 namespace Theorymancer.GuildWars2.Desktop.SkillBar;
 
+public sealed record SkillBarIconTemplate(
+    SkillBarComponentKind Kind,
+    string Name,
+    int SkillId,
+    string Path);
+
 public sealed record SkillBarLayoutDebugInfo(
-    IReadOnlyList<HudOcrWord> RecognizedWords,
-    IReadOnlyList<HudOcrWord> SelectedLabels,
-    double? LabelSpacing,
-    double? LabelConfidence,
-    int? SquareSize,
-    int? HorizontalOffset,
-    int? SquareTop,
-    double? BorderEvidence);
+    int? AnchorSkillId,
+    double? AnchorScore,
+    int? IconSize,
+    int? AnchorX,
+    int? AnchorY,
+    double? SlotSpacing,
+    double? MatchScore);
 
 public sealed record SkillBarLayoutDetection(
     SkillBarLayout? Layout,
@@ -23,187 +28,246 @@ public sealed record SkillBarLayoutDetection(
 
 public static class SkillBarLayoutDetector
 {
-    private const int SkillsPerGroup = 5;
+    private const double MinimumAnchorScore = 0.60;
+    private const double MinimumSlotScore = 0.50;
+    private const double ButtonToSpacingRatio = 0.97;
 
-    public static SkillBarLayoutDetection Detect(CapturedFrame frame, IReadOnlyList<HudOcrWord> words)
+    public static SkillBarLayoutDetection Detect(
+        CapturedFrame frame,
+        IReadOnlyList<SkillBarIconTemplate> templates)
     {
-        var visualLayout = FindVisualLayout(frame);
-        if (visualLayout is null)
+        var heal = FindBest(frame, FullFrame(frame), templates, SkillBarComponentKind.HealSkill, 32, Math.Min(256, Math.Min(frame.Width, frame.Height)));
+        if (heal is null || heal.Match.Score < MinimumAnchorScore)
         {
-            return new SkillBarLayoutDetection(
-                null,
-                0,
-                "Could not find two rows of five skill icons. Redraw the crop so the full skill bar is visible and unobscured.",
-                new SkillBarLayoutDebugInfo(words, [], null, null, null, null, null, null));
+            return Failed($"Could not confidently find the build's heal icon in this crop (best raw pixel score: {heal?.Match.Score:F3}). Include the full skill bar and avoid transformed states.", heal);
         }
 
-        var components = new List<SkillBarComponent>(10);
-        AddComponents(components, visualLayout.Left.Bounds, SkillBarComponentKind.WeaponSkill1, frame, visualLayout.Confidence);
-        AddComponents(components, visualLayout.Right.Bounds, SkillBarComponentKind.HealSkill, frame, visualLayout.Confidence);
-        return new SkillBarLayoutDetection(
-            new SkillBarLayout(components),
-            visualLayout.Confidence,
-            visualLayout.Confidence >= 0.75
-                ? "Detected ten skill slots from the visual skill-bar layout. Confirm that the green boxes cover the icon interiors."
-                : "Detected a possible visual skill-bar layout. Check the amber boxes before saving this layout.",
-            new SkillBarLayoutDebugInfo(
-                words,
-                [],
-                visualLayout.Left.Spacing,
-                visualLayout.Confidence,
-                visualLayout.Left.Size,
-                visualLayout.Left.HorizontalOffset,
-                visualLayout.Left.Top,
-                (visualLayout.Left.Evidence + visualLayout.Right.Evidence) / 2));
-    }
+        var templateSize = heal.Match.Bounds.Width;
+        var minimumSize = Math.Max(20, (int)Math.Round(templateSize * 0.8));
+        var maximumSize = Math.Max(minimumSize, (int)Math.Round(templateSize * 1.2));
+        var row = RowRegion(frame, heal.Match.Bounds, templateSize, beforeAnchor: true, afterAnchor: true);
 
-    private static void AddComponents(
-        ICollection<SkillBarComponent> components,
-        IReadOnlyList<ScreenBounds> bounds,
-        SkillBarComponentKind firstKind,
-        CapturedFrame frame,
-        double confidence)
-    {
-        for (var index = 0; index < bounds.Count; index++)
+        var utility1 = FindBest(
+            frame,
+            Region(frame, heal.Match.Bounds.X + templateSize / 2, row.Y, templateSize * 2, row.Height),
+            templates,
+            SkillBarComponentKind.UtilitySkill1,
+            minimumSize,
+            maximumSize);
+        if (utility1 is null || utility1.Match.Score < MinimumSlotScore)
         {
-            components.Add(SkillBarComponent.FromPixelBounds(
-                (SkillBarComponentKind)((int)firstKind + index),
-                bounds[index],
+            return Failed("Found the heal icon, but could not confirm the first utility icon beside it.", heal);
+        }
+
+        var rightSpacing = utility1.Match.Bounds.X - heal.Match.Bounds.X;
+        var rightCenterSpacing = CenterX(utility1.Match.Bounds) - CenterX(heal.Match.Bounds);
+        if (rightSpacing <= 0)
+        {
+            return Failed("The heal and first utility icon did not form a usable skill-bar row.", heal);
+        }
+
+        var slots = new Dictionary<SkillBarComponentKind, TemplateMatch>
+        {
+            [SkillBarComponentKind.HealSkill] = heal,
+            [SkillBarComponentKind.UtilitySkill1] = utility1,
+        };
+        if (!FindRightSlot(SkillBarComponentKind.UtilitySkill2, 2) ||
+            !FindRightSlot(SkillBarComponentKind.UtilitySkill3, 3) ||
+            !FindRightSlot(SkillBarComponentKind.EliteSkill, 4))
+        {
+            return Failed("Found the right skill group, but could not refine every utility slot.", heal, rightSpacing);
+        }
+
+        // Weapon skill 2 is the first weapon anchor because skill 1 can have an autocast overlay.
+        var weapon2 = FindBest(
+            frame,
+            Region(frame, 0, row.Y, Math.Max(0, heal.Match.Bounds.X), row.Height),
+            templates,
+            SkillBarComponentKind.WeaponSkill2,
+            minimumSize,
+            maximumSize);
+        if (weapon2 is null || weapon2.Match.Score < MinimumSlotScore)
+        {
+            return Failed("Found the right skill group, but could not locate weapon skill 2 on the same row.", heal, rightSpacing);
+        }
+
+        slots[SkillBarComponentKind.WeaponSkill2] = weapon2;
+        var weapon3 = FindNear(
+            frame,
+            weapon2.Match.Bounds.X + rightSpacing,
+            weapon2.Match.Bounds.Y,
+            templateSize,
+            templates,
+            SkillBarComponentKind.WeaponSkill3,
+            minimumSize,
+            maximumSize);
+        if (weapon3 is null || weapon3.Match.Score < MinimumSlotScore)
+        {
+            return Failed("Found weapon skill 2, but could not confirm weapon skill 3 beside it.", heal, rightSpacing);
+        }
+
+        slots[SkillBarComponentKind.WeaponSkill3] = weapon3;
+        var weaponSpacing = weapon3.Match.Bounds.X - weapon2.Match.Bounds.X;
+        var weaponCenterSpacing = CenterX(weapon3.Match.Bounds) - CenterX(weapon2.Match.Bounds);
+        if (weaponSpacing <= 0 ||
+            !FindWeaponSlot(SkillBarComponentKind.WeaponSkill1, weapon2.Match.Bounds.X - weaponSpacing, required: false) ||
+            !FindWeaponSlot(SkillBarComponentKind.WeaponSkill4, weapon2.Match.Bounds.X + weaponSpacing * 2, required: true) ||
+            !FindWeaponSlot(SkillBarComponentKind.WeaponSkill5, weapon2.Match.Bounds.X + weaponSpacing * 3, required: true))
+        {
+            return Failed("Found weapon skills 2 and 3, but could not refine the full weapon group.", heal, rightSpacing);
+        }
+
+        var buttonSize = Math.Max(1, (int)Math.Round((rightCenterSpacing + weaponCenterSpacing) / 2 * ButtonToSpacingRatio));
+        var rowCenter = Median(slots.Values.Select(match => CenterY(match.Match.Bounds)));
+        var components = Enum.GetValues<SkillBarComponentKind>()
+            .Select(kind => SkillBarComponent.FromPixelBounds(
+                kind,
+                ToButtonBounds(slots[kind].Match.Bounds, buttonSize, rowCenter),
                 frame.Width,
                 frame.Height,
+                slots[kind].Match.Score))
+            .ToList();
+        var confidence = slots.Values.Average(match => match.Match.Score);
+        return new SkillBarLayoutDetection(
+            new SkillBarLayout(components),
+            confidence,
+            "Detected the skill bar from build-icon pixel matches. Confirm that the green boxes cover the icon interiors.",
+            new SkillBarLayoutDebugInfo(
+                heal.Template.SkillId,
+                heal.Match.Score,
+                buttonSize,
+                ToButtonBounds(heal.Match.Bounds, buttonSize, rowCenter).X,
+                (int)Math.Round(rowCenter - buttonSize / 2.0),
+                (rightSpacing + weaponSpacing) / 2.0,
                 confidence));
-        }
-    }
 
-    private static VisualLayoutCandidate? FindVisualLayout(CapturedFrame frame)
-    {
-        var groups = FindGroupCandidates(frame);
-        VisualLayoutCandidate? best = null;
-        foreach (var left in groups)
+        bool FindRightSlot(SkillBarComponentKind kind, int offset)
         {
-            foreach (var right in groups)
+            var match = FindNear(frame, heal.Match.Bounds.X + rightSpacing * offset, heal.Match.Bounds.Y, templateSize, templates, kind, minimumSize, maximumSize);
+            if (match is null || match.Match.Score < MinimumSlotScore)
             {
-                var groupSize = Math.Max(left.Size, right.Size);
-                var gap = right.Bounds[0].X - left.Bounds[^1].Right;
-                var gapInIconWidths = (double)gap / groupSize;
-                if (left.Bounds[0].X >= right.Bounds[0].X ||
-                    gapInIconWidths is < 1.45 or > 2.65 ||
-                    Math.Abs(left.Top - right.Top) > Math.Max(left.Size, right.Size) * 0.3 ||
-                    Math.Abs(left.Size - right.Size) > Math.Max(left.Size, right.Size) * 0.2)
-                {
-                    continue;
-                }
-
-                var alignmentPenalty = (double)Math.Abs(left.Top - right.Top) / Math.Max(left.Size, right.Size);
-                var sizePenalty = (double)Math.Abs(left.Size - right.Size) / Math.Max(left.Size, right.Size);
-                var gapPenalty = Math.Abs(gapInIconWidths - 2.0) / 2.0;
-                var rowCenter = ((left.Top + left.Size / 2.0) + (right.Top + right.Size / 2.0)) / 2 / frame.Height;
-                var verticalPenalty = Math.Abs(rowCenter - 0.70);
-                var barCenter = (left.Bounds[0].X + right.Bounds[^1].Right) / 2.0 / frame.Width;
-                var horizontalPenalty = Math.Abs(barCenter - 0.50);
-                var confidence = Math.Clamp((left.Evidence + right.Evidence) / 2 - alignmentPenalty * 0.1 - sizePenalty * 0.1 - gapPenalty * 0.1 - verticalPenalty * 0.8 - horizontalPenalty * 0.5, 0, 1);
-                var candidate = new VisualLayoutCandidate(left, right, confidence);
-                if (best is null || candidate.Confidence > best.Confidence)
-                {
-                    best = candidate;
-                }
+                return false;
             }
+
+            slots[kind] = match;
+            return true;
         }
 
-        return best;
-    }
-
-    private static IReadOnlyList<IconGroupCandidate> FindGroupCandidates(CapturedFrame frame)
-    {
-        var sizes = new[] { 0.28, 0.31, 0.34, 0.37, 0.40 }
-            .Select(fraction => Math.Max(24, (int)Math.Round(frame.Height * fraction)))
-            .Distinct()
-            .ToList();
-        var candidates = new List<IconGroupCandidate>();
-        foreach (var size in sizes)
+        bool FindWeaponSlot(SkillBarComponentKind kind, int expectedX, bool required)
         {
-            var step = Math.Max(2, size / 14);
-            for (var spacing = (int)Math.Round(size * 0.9); spacing <= (int)Math.Round(size * 1.15); spacing += step)
+            var match = FindNear(frame, expectedX, weapon2.Match.Bounds.Y, templateSize, templates, kind, minimumSize, maximumSize);
+            if (match is null || (required && match.Match.Score < MinimumSlotScore))
             {
-                var groupWidth = size + (SkillsPerGroup - 1) * spacing;
-                for (var top = (int)Math.Round(frame.Height * 0.35); top <= frame.Height - size; top += step)
-                {
-                    for (var left = 0; left <= frame.Width - groupWidth; left += step)
-                    {
-                        var bounds = Enumerable.Range(0, SkillsPerGroup)
-                            .Select(index => new ScreenBounds(left + index * spacing, top, size, size))
-                            .ToList();
-                        var evidence = bounds.Average(bound => GetIconEvidence(frame, bound));
-                        candidates.Add(new IconGroupCandidate(bounds, size, spacing, left, top, evidence));
-                    }
-                }
+                return false;
             }
+
+            slots[kind] = match;
+            return true;
         }
-
-        return candidates
-            .OrderByDescending(candidate => candidate.Evidence)
-            .Take(160)
-            .ToList();
     }
 
-    private static double GetIconEvidence(CapturedFrame frame, ScreenBounds bounds)
+    private static TemplateMatch? FindNear(
+        CapturedFrame frame,
+        int expectedX,
+        int expectedY,
+        int iconSize,
+        IReadOnlyList<SkillBarIconTemplate> templates,
+        SkillBarComponentKind kind,
+        int minimumSize,
+        int maximumSize)
     {
-        var minimumChannel = byte.MaxValue;
-        var maximumChannel = byte.MinValue;
-        foreach (var fraction in new[] { 0.2, 0.4, 0.6, 0.8 })
-        {
-            var x = bounds.X + (int)Math.Round((bounds.Width - 1) * fraction);
-            var y = bounds.Y + (int)Math.Round((bounds.Height - 1) * fraction);
-            var index = y * frame.Stride + x * 4;
-            minimumChannel = Math.Min(minimumChannel, frame.BgraPixels[index]);
-            minimumChannel = Math.Min(minimumChannel, frame.BgraPixels[index + 1]);
-            minimumChannel = Math.Min(minimumChannel, frame.BgraPixels[index + 2]);
-            maximumChannel = Math.Max(maximumChannel, frame.BgraPixels[index]);
-            maximumChannel = Math.Max(maximumChannel, frame.BgraPixels[index + 1]);
-            maximumChannel = Math.Max(maximumChannel, frame.BgraPixels[index + 2]);
-        }
-
-        var channelRange = (maximumChannel - minimumChannel) / 255.0;
-        return Math.Clamp(GetBorderEvidence(frame, bounds) * 0.7 + channelRange * 0.3, 0, 1);
+        var horizontalSlack = Math.Max(4, (int)Math.Round(iconSize * 0.3));
+        var verticalSlack = Math.Max(4, (int)Math.Round(iconSize * 0.2));
+        return FindBest(
+            frame,
+            Region(
+                frame,
+                expectedX - horizontalSlack,
+                expectedY - verticalSlack,
+                maximumSize + horizontalSlack * 2,
+                maximumSize + verticalSlack * 2),
+            templates,
+            kind,
+            minimumSize,
+            maximumSize);
     }
 
-    private static double GetBorderEvidence(CapturedFrame frame, ScreenBounds bounds)
+    private static TemplateMatch? FindBest(
+        CapturedFrame frame,
+        ScreenBounds region,
+        IReadOnlyList<SkillBarIconTemplate> templates,
+        SkillBarComponentKind kind,
+        int minimumSize,
+        int maximumSize)
     {
-        var samples = 0;
-        var difference = 0L;
-        foreach (var fraction in new[] { 0.15, 0.35, 0.5, 0.65, 0.85 })
-        {
-            var x = bounds.X + (int)Math.Round((bounds.Width - 1) * fraction);
-            var y = bounds.Y + (int)Math.Round((bounds.Height - 1) * fraction);
-            difference += PixelDifference(frame, x, bounds.Y, x, Math.Min(bounds.Bottom - 1, bounds.Y + 2));
-            difference += PixelDifference(frame, x, bounds.Bottom - 1, x, Math.Max(bounds.Y, bounds.Bottom - 3));
-            difference += PixelDifference(frame, bounds.X, y, Math.Min(bounds.Right - 1, bounds.X + 2), y);
-            difference += PixelDifference(frame, bounds.Right - 1, y, Math.Max(bounds.X, bounds.Right - 3), y);
-            samples += 4;
-        }
-
-        return Math.Clamp((double)difference / (samples * 765), 0, 1);
+        return templates
+            .Where(template => template.Kind == kind)
+            .Select(template =>
+            {
+                var match = IconTemplateMatcher.FindBestMatchInRegion(
+                    frame,
+                    region,
+                    minimumSize,
+                    maximumSize,
+                    template.Path,
+                    template.Name,
+                    template.SkillId);
+                return match is null ? null : new TemplateMatch(template, match);
+            })
+            .OfType<TemplateMatch>()
+            .MaxBy(match => match.Match.Score);
     }
 
-    private static int PixelDifference(CapturedFrame frame, int leftX, int leftY, int rightX, int rightY)
+    private static SkillBarLayoutDetection Failed(string message, TemplateMatch? anchor = null, double? spacing = null) => new(
+        null,
+        0,
+        message,
+        new SkillBarLayoutDebugInfo(
+            anchor?.Template.SkillId,
+            anchor?.Match.Score,
+            anchor?.Match.Bounds.Width,
+            anchor?.Match.Bounds.X,
+            anchor?.Match.Bounds.Y,
+            spacing,
+            null));
+
+    private static ScreenBounds FullFrame(CapturedFrame frame) => new(0, 0, frame.Width, frame.Height);
+
+    private static ScreenBounds ToButtonBounds(ScreenBounds templateBounds, int size, double rowCenter)
     {
-        var leftIndex = leftY * frame.Stride + leftX * 4;
-        var rightIndex = rightY * frame.Stride + rightX * 4;
-        return Math.Abs(frame.BgraPixels[leftIndex] - frame.BgraPixels[rightIndex]) +
-            Math.Abs(frame.BgraPixels[leftIndex + 1] - frame.BgraPixels[rightIndex + 1]) +
-            Math.Abs(frame.BgraPixels[leftIndex + 2] - frame.BgraPixels[rightIndex + 2]);
+        return new ScreenBounds(
+            (int)Math.Round(CenterX(templateBounds) - size / 2.0),
+            (int)Math.Round(rowCenter - size / 2.0),
+            size,
+            size);
     }
 
-    private sealed record IconGroupCandidate(
-        IReadOnlyList<ScreenBounds> Bounds,
-        int Size,
-        int Spacing,
-        int HorizontalOffset,
-        int Top,
-        double Evidence);
+    private static double CenterX(ScreenBounds bounds) => bounds.X + bounds.Width / 2.0;
 
-    private sealed record VisualLayoutCandidate(
-        IconGroupCandidate Left,
-        IconGroupCandidate Right,
-        double Confidence);
+    private static double CenterY(ScreenBounds bounds) => bounds.Y + bounds.Height / 2.0;
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var ordered = values.Order().ToList();
+        return (ordered[(ordered.Count - 1) / 2] + ordered[ordered.Count / 2]) / 2;
+    }
+
+    private static ScreenBounds RowRegion(CapturedFrame frame, ScreenBounds anchor, int iconSize, bool beforeAnchor, bool afterAnchor)
+    {
+        var verticalSlack = Math.Max(4, (int)Math.Round(iconSize * 0.2));
+        var left = beforeAnchor ? 0 : anchor.X;
+        var right = afterAnchor ? frame.Width : anchor.Right;
+        return Region(frame, left, anchor.Y - verticalSlack, right - left, iconSize + verticalSlack * 2);
+    }
+
+    private static ScreenBounds Region(CapturedFrame frame, int x, int y, int width, int height)
+    {
+        var left = Math.Clamp(x, 0, frame.Width);
+        var top = Math.Clamp(y, 0, frame.Height);
+        var right = Math.Clamp((long)x + width, 0, frame.Width);
+        var bottom = Math.Clamp((long)y + height, 0, frame.Height);
+        return new ScreenBounds(left, top, Math.Max(0, (int)right - left), Math.Max(0, (int)bottom - top));
+    }
+
+    private sealed record TemplateMatch(SkillBarIconTemplate Template, IconTemplateMatch Match);
 }

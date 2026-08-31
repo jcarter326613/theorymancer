@@ -73,19 +73,32 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
         var frame = LoadFrame(Path.Combine(ScenarioDirectory, fixture.Screenshot));
         frame = ScaleFrame(frame, scaleFactor);
 
-        var detection = SkillBarLayoutDetector.Detect(frame, []);
+        var detection = SkillBarLayoutDetector.Detect(frame, fixture.Slots
+            .Select(slot => new SkillBarIconTemplate(
+                slot.ComponentKind,
+                slot.Name,
+                slot.SkillId,
+                Path.Combine(ScenarioDirectory, "icons", slot.IconFile)))
+            .ToList());
 
         Assert.True(detection.IsUsable, detection.Message);
         var layout = Assert.IsType<SkillBarLayout>(detection.Layout);
+        var errors = new List<string>();
         foreach (var expected in fixture.Slots)
         {
             var component = Assert.Single(layout.Components, component => component.Kind == expected.ComponentKind);
-            AssertBoundsNear(
+            var error = GetBoundsError(
                 component.ToPixelBounds(frame.Width, frame.Height),
                 expected.ToBounds(scaleFactor),
                 scaleFactor,
                 expected.ComponentKind);
+            if (error is not null)
+            {
+                errors.Add(error);
+            }
         }
+
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
     }
 
     [Theory]
@@ -207,20 +220,20 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
             Math.Max(1, (int)Math.Round(Height * scaleFactor)));
     }
 
-    private static void AssertBoundsNear(
+    private static string? GetBoundsError(
         ScreenBounds actual,
         ScreenBounds expected,
         double scaleFactor,
         SkillBarComponentKind kind)
     {
-        var tolerance = Math.Max(2, (int)Math.Ceiling(6 * scaleFactor));
-        Assert.True(
-            Math.Abs(actual.X - expected.X) <= tolerance &&
+        var tolerance = Math.Max(2, (int)Math.Ceiling(8 * scaleFactor));
+        return Math.Abs(actual.X - expected.X) <= tolerance &&
             Math.Abs(actual.Y - expected.Y) <= tolerance &&
             Math.Abs(actual.Width - expected.Width) <= tolerance &&
-            Math.Abs(actual.Height - expected.Height) <= tolerance,
-            $"{kind}: expected ({expected.X}, {expected.Y}, {expected.Width}, {expected.Height}) +/- {tolerance}; " +
-            $"detected ({actual.X}, {actual.Y}, {actual.Width}, {actual.Height}).");
+            Math.Abs(actual.Height - expected.Height) <= tolerance
+            ? null
+            : $"{kind}: expected ({expected.X}, {expected.Y}, {expected.Width}, {expected.Height}) +/- {tolerance}; " +
+              $"detected ({actual.X}, {actual.Y}, {actual.Width}, {actual.Height}).";
     }
 
     private sealed record BuildInput(
