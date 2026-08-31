@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Windows;
 using Theorymancer.GuildWars2.Desktop.Authentication;
+using Theorymancer.GuildWars2.Desktop.ArenaNet;
 using Theorymancer.GuildWars2.Desktop.SkillBar;
 
 namespace Theorymancer.GuildWars2.Desktop;
@@ -10,6 +11,7 @@ public partial class App : Application
     private readonly CancellationTokenSource _shutdown = new();
     private HttpClient? _mainApiHttpClient;
     private HttpClient? _guildWars2HttpClient;
+    private HttpClient? _arenaNetHttpClient;
     private DpopProofFactory? _proofFactory;
     private DesktopAuthenticationService? _authentication;
 
@@ -34,8 +36,15 @@ public partial class App : Application
             _guildWars2HttpClient = new HttpClient();
             var guildWars2ApiClient = new GuildWars2ApiClient(_guildWars2HttpClient, _authentication);
             var referenceIcons = new ReferenceIcons(guildWars2ApiClient, configuration);
+            _arenaNetHttpClient = new HttpClient();
+            var arenaNetApiClient = new ArenaNetApiClient(_arenaNetHttpClient);
 
-            MainWindow = new MainWindow(_authentication, referenceIcons, _shutdown.Token);
+            MainWindow = new MainWindow(
+                _authentication,
+                referenceIcons,
+                new ArenaNetApiKeyStore(),
+                arenaNetApiClient,
+                _shutdown.Token);
             MainWindow.Show();
         }
         catch (Exception exception)
@@ -55,6 +64,7 @@ public partial class App : Application
         _authentication?.Dispose();
         _proofFactory?.Dispose();
         _guildWars2HttpClient?.Dispose();
+        _arenaNetHttpClient?.Dispose();
         _mainApiHttpClient?.Dispose();
         _shutdown.Dispose();
         base.OnExit(e);

@@ -6,11 +6,31 @@ ingestion, mechanics models, and deterministic performance analysis.
 `desktop/` is a self-contained C# WPF companion application for capturing the
 visible, calibrated combat-log panel and recognizing changed rows locally. It
 requires calibration of both the combat log and skill bar, which is retained
-across sessions. Skill-bar calibration detects and displays its five weapon
-slots for review before saving; it does not yet identify the icons or sample
-skill activations. It never loads into the game client, accesses game memory,
-or intercepts network traffic. It must be run with Guild Wars 2 visible and
-unobscured.
+across sessions. Before calibrating the skill bar, users load a selected
+character's active build through an ArenaNet API key. Calibration detects keys
+`1` through `0` and matches their icons against the build's heal, utility,
+elite, and equipped-weapon candidates. It never loads into the game client,
+accesses game memory, or intercepts network traffic. It must be run with Guild
+Wars 2 visible and unobscured.
+
+## ArenaNet Build Access
+
+Create an ArenaNet API key with only the `account`, `characters`, and `builds`
+permissions, then enter it in the desktop collector. The collector validates
+the key with ArenaNet, lets the user select a character, and reads its active
+build and equipment tabs. The key is encrypted with Windows DPAPI for the
+current user and is sent directly to `https://api.guildwars2.com`; it is never
+sent to Theorymancer services or written to diagnostics or capture files.
+The selected character and non-secret build candidate IDs are included with a
+capture session when that build remains loaded, so later analysis can reproduce
+the candidate set used during calibration.
+
+ArenaNet exposes active tabs for a selected character, not the character
+currently displayed by the game client or its currently drawn weapon set.
+Refresh the build after changing templates, and keep both equipped weapon sets
+available while calibrating. Temporary replacement bars such as kits,
+transformations, shroud, and profession mechanics are not matched in this first
+implementation.
 
 The collector targets Windows 10 version 2004 or later on x64 hardware. It
 uses Windows' English OCR language pack; install that pack through Windows

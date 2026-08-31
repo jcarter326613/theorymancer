@@ -9,6 +9,11 @@ public enum SkillBarComponentKind
     WeaponSkill3,
     WeaponSkill4,
     WeaponSkill5,
+    HealSkill,
+    UtilitySkill1,
+    UtilitySkill2,
+    UtilitySkill3,
+    EliteSkill,
 }
 
 public sealed record SkillBarComponent(
@@ -41,8 +46,9 @@ public sealed record SkillBarComponent(
 
 public sealed record SkillBarLayout(IReadOnlyList<SkillBarComponent> Components)
 {
-    public bool HasWeaponSkillSlots => Components
+    public bool HasSkillSlots => Components
         .Select(component => component.Kind)
         .Order()
         .SequenceEqual(Enum.GetValues<SkillBarComponentKind>());
+
 }

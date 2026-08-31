@@ -38,6 +38,17 @@ public static class IconTemplateMatcher
         return new IconTemplateMatch(name, skillId, refined.Bounds, refined.Score);
     }
 
+    public static IconTemplateMatch MatchAt(
+        CapturedFrame frame,
+        ScreenBounds bounds,
+        string referenceIconPath,
+        string name,
+        int skillId)
+    {
+        var template = LoadTemplate(referenceIconPath);
+        return new IconTemplateMatch(name, skillId, bounds, GetNormalizedCorrelation(frame, bounds, template));
+    }
+
     private static Candidate FindBestCandidate(
         CapturedFrame frame,
         ReferenceTemplate template,

@@ -1,4 +1,5 @@
 using Theorymancer.GuildWars2.Desktop.Calibration;
+using Theorymancer.GuildWars2.Desktop.ArenaNet;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 using System.Diagnostics;
@@ -52,7 +53,8 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
     public static async Task<CombatLogCaptureSession> StartAsync(
         SelectedGameWindow gameWindow,
         CollectorSettings settings,
-        bool diagnosticsEnabled)
+        bool diagnosticsEnabled,
+        BuildSkillCandidates? buildCandidates = null)
     {
         if (settings.CombatLogCrop is null)
         {
@@ -106,6 +108,13 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
             {
                 capture_frames_per_second = CaptureFramesPerSecond,
                 ocr_frames_per_second = CaptureFramesPerSecond,
+                build = buildCandidates is null ? null : new
+                {
+                    character_name = buildCandidates.CharacterName,
+                    build_name = buildCandidates.BuildName,
+                    profession = buildCandidates.Profession,
+                    skill_ids_by_slot = buildCandidates.SkillIdsBySlot,
+                },
             });
             return session;
         }

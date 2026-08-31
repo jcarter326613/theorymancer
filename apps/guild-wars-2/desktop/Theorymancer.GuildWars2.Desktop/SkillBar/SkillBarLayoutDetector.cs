@@ -18,12 +18,12 @@ public sealed record SkillBarLayoutDetection(
     string Message,
     SkillBarLayoutDebugInfo DebugInfo)
 {
-    public bool IsUsable => Layout is not null && Layout.HasWeaponSkillSlots;
+    public bool IsUsable => Layout is not null && Layout.HasSkillSlots;
 }
 
 public static class SkillBarLayoutDetector
 {
-    private const int WeaponSkillCount = 5;
+    private static readonly string[] HotkeySequence = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 
     public static SkillBarLayoutDetection Detect(CapturedFrame frame, IReadOnlyList<HudOcrWord> words)
     {
@@ -37,7 +37,7 @@ public static class SkillBarLayoutDetector
             return new SkillBarLayoutDetection(
                 null,
                 0,
-                "Could not find five evenly spaced skill labels. Redraw the crop so the weapon skills are clear and unobscured.",
+                "Could not find the 1 through 0 skill labels. Redraw the crop so every weapon, heal, utility, and elite skill is clear and unobscured.",
                 new SkillBarLayoutDebugInfo(recognizedWords, [], null, null, null, null, null, null));
         }
 
@@ -55,8 +55,8 @@ public static class SkillBarLayoutDetector
             new SkillBarLayout(components),
             confidence,
             confidence >= 0.75
-                ? "Detected five weapon skill slots. Confirm that the green boxes cover the icon interiors."
-                : "Detected a possible weapon skill row. Check the amber boxes before saving this layout.",
+                ? "Detected ten skill slots. Confirm that the green boxes cover the icon interiors."
+                : "Detected a possible skill row. Check the amber boxes before saving this layout.",
             new SkillBarLayoutDebugInfo(
                 recognizedWords,
                 cluster.Labels,
@@ -84,30 +84,48 @@ public static class SkillBarLayoutDetector
                 .Where(candidate => Math.Abs(candidate.CenterY - anchor.CenterY) <= Math.Max(candidate.Height, anchor.Height) * 1.25)
                 .OrderBy(candidate => candidate.CenterX)
                 .ToList();
-            for (var start = 0; start <= sameRow.Count - WeaponSkillCount; start++)
+            var candidates = new List<HudOcrWord>();
+            var previousX = double.NegativeInfinity;
+            foreach (var hotkey in HotkeySequence)
             {
-                var candidates = sameRow.Skip(start).Take(WeaponSkillCount).ToList();
-                var spacings = candidates.Zip(candidates.Skip(1), (left, right) => right.CenterX - left.CenterX).ToList();
-                var spacing = spacings.Average();
-                if (spacing < Math.Max(12, candidates.Max(candidate => candidate.Width) * 1.5))
+                var label = sameRow.FirstOrDefault(candidate =>
+                    candidate.Text.Trim() == hotkey &&
+                    candidate.CenterX > previousX);
+                if (label is null)
                 {
-                    continue;
+                    candidates.Clear();
+                    break;
                 }
 
-                var spacingDeviation = StandardDeviation(spacings) / spacing;
-                var verticalDeviation = StandardDeviation(candidates.Select(candidate => candidate.CenterY)) /
-                    Math.Max(1, candidates.Average(candidate => candidate.Height));
-                var sizeDeviation = StandardDeviation(candidates.Select(candidate => candidate.Height)) /
-                    Math.Max(1, candidates.Average(candidate => candidate.Height));
-                var numberBonus = candidates.Select(candidate => candidate.Text.Trim()).SequenceEqual(["1", "2", "3", "4", "5"])
-                    ? 0.2
-                    : 0;
-                var confidence = Math.Clamp(1 - spacingDeviation * 2 - verticalDeviation * 0.2 - sizeDeviation * 0.2 + numberBonus, 0, 1);
-                var cluster = new LabelCluster(candidates, spacing, confidence);
-                if (best is null || cluster.Confidence > best.Confidence)
-                {
-                    best = cluster;
-                }
+                candidates.Add(label);
+                previousX = label.CenterX;
+            }
+
+            if (candidates.Count != HotkeySequence.Length)
+            {
+                continue;
+            }
+
+            var spacings = candidates.Zip(candidates.Skip(1), (left, right) => right.CenterX - left.CenterX).ToList();
+            var withinGroupSpacings = spacings
+                .Where((_, index) => index != 4)
+                .ToList();
+            var spacing = withinGroupSpacings.Order().ElementAt(withinGroupSpacings.Count / 2);
+            if (spacing < Math.Max(12, candidates.Max(candidate => candidate.Width) * 1.5))
+            {
+                continue;
+            }
+
+            var spacingDeviation = StandardDeviation(withinGroupSpacings) / spacing;
+            var verticalDeviation = StandardDeviation(candidates.Select(candidate => candidate.CenterY)) /
+                Math.Max(1, candidates.Average(candidate => candidate.Height));
+            var sizeDeviation = StandardDeviation(candidates.Select(candidate => candidate.Height)) /
+                Math.Max(1, candidates.Average(candidate => candidate.Height));
+            var confidence = Math.Clamp(1 - spacingDeviation * 2 - verticalDeviation * 0.2 - sizeDeviation * 0.2, 0, 1);
+            var cluster = new LabelCluster(candidates, spacing, confidence);
+            if (best is null || cluster.Confidence > best.Confidence)
+            {
+                best = cluster;
             }
         }
 

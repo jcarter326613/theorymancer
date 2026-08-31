@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Theorymancer.GuildWars2.Desktop.Authentication;
+using Theorymancer.GuildWars2.Desktop.ArenaNet;
 using Theorymancer.GuildWars2.Desktop.Calibration;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
@@ -18,34 +19,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CollectorSettingsStore _settingsStore = new();
     private readonly DesktopAuthenticationService _authentication;
     private readonly ReferenceIcons _referenceIcons;
+    private readonly ArenaNetApiKeyStore _arenaNetApiKeyStore;
+    private readonly IArenaNetApiClient _arenaNetApiClient;
+    private readonly ArenaNetBuildLoader _arenaNetBuildLoader;
     private readonly CancellationToken _shutdownToken;
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
     private CombatLogCaptureSession? _captureSession;
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
+    private BuildSkillCandidates? _loadedBuildCandidates;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
     private string _authenticationStatus = "Signed out";
+    private string _arenaNetStatus = "Connect an ArenaNet API key to select a character and load its active build.";
 
     public MainWindow(
         DesktopAuthenticationService authentication,
         ReferenceIcons referenceIcons,
+        ArenaNetApiKeyStore arenaNetApiKeyStore,
+        IArenaNetApiClient arenaNetApiClient,
         CancellationToken shutdownToken)
     {
         _authentication = authentication;
         _referenceIcons = referenceIcons;
+        _arenaNetApiKeyStore = arenaNetApiKeyStore;
+        _arenaNetApiClient = arenaNetApiClient;
+        _arenaNetBuildLoader = new ArenaNetBuildLoader(arenaNetApiClient);
         _shutdownToken = shutdownToken;
         InitializeComponent();
         DataContext = this;
         _settings = _settingsStore.Load();
         _authentication.StateChanged += Authentication_StateChanged;
         UpdateAuthenticationControls();
+        if (_arenaNetApiKeyStore.Load() is not null)
+        {
+            ArenaNetStatus = "ArenaNet API key configured. Connect to select a character.";
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<string> ActivityLog { get; } = [];
+
+    public ObservableCollection<string> ArenaNetCharacters { get; } = [];
 
     public string SetupStatus
     {
@@ -63,6 +80,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _authenticationStatus;
         private set => SetField(ref _authenticationStatus, value);
+    }
+
+    public string ArenaNetStatus
+    {
+        get => _arenaNetStatus;
+        private set => SetField(ref _arenaNetStatus, value);
     }
 
     private async void SignIn_Click(object sender, RoutedEventArgs e)
@@ -124,7 +147,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var dialog = new CalibrationDialog(_selectedWindow, _settings, _referenceIcons) { Owner = this };
+        if (_loadedBuildCandidates is null)
+        {
+            ShowSetupError("Connect an ArenaNet API key, select a character, and load its active build before calibrating the skill bar.");
+            return;
+        }
+
+        var dialog = new CalibrationDialog(_selectedWindow, _settings, _referenceIcons, _loadedBuildCandidates) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             _settings = dialog.Settings;
@@ -133,12 +162,116 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private async void ConnectArenaNet_Click(object sender, RoutedEventArgs e)
+    {
+        var apiKey = ArenaNetApiKeyBox.Password;
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            apiKey = _arenaNetApiKeyStore.Load() ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            ShowSetupError("Enter an ArenaNet API key before connecting.");
+            return;
+        }
+
+        try
+        {
+            ArenaNetStatus = "Validating ArenaNet API key...";
+            var token = await _arenaNetApiClient.GetTokenInfoAsync(apiKey, _shutdownToken);
+            var requiredPermissions = new[] { "account", "characters", "builds" };
+            var missingPermissions = requiredPermissions
+                .Where(permission => !token.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (missingPermissions.Count > 0)
+            {
+                throw new InvalidOperationException($"The ArenaNet API key must include: {string.Join(", ", missingPermissions)}.");
+            }
+
+            var characters = await _arenaNetApiClient.GetCharactersAsync(apiKey, _shutdownToken);
+            _arenaNetApiKeyStore.Save(apiKey);
+            ArenaNetApiKeyBox.Password = string.Empty;
+            ArenaNetCharacters.Clear();
+            foreach (var character in characters)
+            {
+                ArenaNetCharacters.Add(character);
+            }
+
+            ArenaNetCharacterComboBox.SelectedItem = ArenaNetCharacters.FirstOrDefault(character =>
+                string.Equals(character, _settings.ArenaNetCharacterName, StringComparison.Ordinal));
+            ArenaNetStatus = ArenaNetCharacters.Count == 0
+                ? "The ArenaNet account has no characters."
+                : "Select a character, then load its active build.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ArenaNetStatus = "ArenaNet API key could not be connected.";
+            ShowSetupError($"ArenaNet connection failed: {exception.Message}");
+        }
+    }
+
+    private void ClearArenaNetKey_Click(object sender, RoutedEventArgs e)
+    {
+        _arenaNetApiKeyStore.Delete();
+        ArenaNetApiKeyBox.Password = string.Empty;
+        ArenaNetCharacters.Clear();
+        ArenaNetCharacterComboBox.SelectedItem = null;
+        _loadedBuildCandidates = null;
+        _settings = _settings with { ArenaNetCharacterName = null };
+        _settingsStore.Save(_settings);
+        ArenaNetStatus = "ArenaNet API key removed from this PC.";
+    }
+
+    private void ArenaNetCharacter_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
+        {
+            return;
+        }
+
+        _loadedBuildCandidates = null;
+        _settings = _settings with { ArenaNetCharacterName = characterName };
+        _settingsStore.Save(_settings);
+        ArenaNetStatus = $"{characterName} selected. Load its active build before calibrating.";
+    }
+
+    private async void LoadArenaNetBuild_Click(object sender, RoutedEventArgs e)
+    {
+        var apiKey = _arenaNetApiKeyStore.Load();
+        if (apiKey is null)
+        {
+            ShowSetupError("Connect an ArenaNet API key before loading a build.");
+            return;
+        }
+
+        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
+        {
+            ShowSetupError("Select an ArenaNet character before loading a build.");
+            return;
+        }
+
+        try
+        {
+            ArenaNetStatus = $"Loading {characterName}'s active build...";
+            _loadedBuildCandidates = await _arenaNetBuildLoader.LoadAsync(apiKey, characterName, _shutdownToken);
+            var candidateCount = _loadedBuildCandidates.SkillIdsBySlot.Values.Sum(skillIds => skillIds.Count);
+            ArenaNetStatus = $"Loaded {_loadedBuildCandidates.BuildName} ({_loadedBuildCandidates.Profession}); {candidateCount} icon candidates ready.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _loadedBuildCandidates = null;
+            ArenaNetStatus = "ArenaNet build could not be loaded.";
+            ShowSetupError($"ArenaNet build load failed: {exception.Message}");
+        }
+    }
+
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedWindow is null ||
             _settings.CombatLogCrop is null ||
             _settings.SkillBarCrop is null ||
-            _settings.SkillBarLayout is not { HasWeaponSkillSlots: true })
+            _settings.SkillBarLayout is not { HasSkillSlots: true })
         {
             ShowSetupError("Select the GW2 window, calibrate both required interface regions, and analyze the skill-bar layout before recording.");
             return;
@@ -154,7 +287,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            _captureSession = await CombatLogCaptureSession.StartAsync(_selectedWindow, _settings, _diagnosticsEnabled);
+            _captureSession = await CombatLogCaptureSession.StartAsync(
+                _selectedWindow,
+                _settings,
+                _diagnosticsEnabled,
+                _loadedBuildCandidates);
             _captureSession.StatusChanged += CombatLogCaptureSession_StatusChanged;
             _captureSession.LineRecognized += CombatLogCaptureSession_LineRecognized;
             _captureSession.DiagnosticsUpdated += CombatLogCaptureSession_DiagnosticsUpdated;
@@ -280,7 +417,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_selectedWindow is null ||
             _settings.CombatLogCrop is null ||
             _settings.SkillBarCrop is null ||
-            _settings.SkillBarLayout is not { HasWeaponSkillSlots: true })
+            _settings.SkillBarLayout is not { HasSkillSlots: true })
         {
             ShowSetupError("Select the Guild Wars 2 window, calibrate both required interface regions, and analyze the skill-bar layout before running diagnostic OCR.");
             return;

@@ -1,0 +1,45 @@
+{
+  "characterName": "Fixture Reaper",
+  "buildTab": {
+    "tab": 1,
+    "isActive": true,
+    "build": {
+      "name": "Reaper greatsword fixture",
+      "profession": "Necromancer",
+      "specializations": [
+        { "id": 34, "traits": [] }
+      ],
+      "skills": {
+        "heal": 21762,
+        "utilities": [30670, 29414, 30772],
+        "elite": 30105
+      }
+    }
+  },
+  "equipmentTab": {
+    "tab": 1,
+    "isActive": true,
+    "equipment": [
+      { "id": 100001, "slot": "WeaponA1" }
+    ]
+  },
+  "items": [
+    { "id": 100001, "details": { "type": "Greatsword" } }
+  ],
+  "profession": {
+    "id": "Necromancer",
+    "weapons": {
+      "Greatsword": {
+        "flags": ["TwoHand"],
+        "specialization": 34,
+        "skills": [
+          { "id": 29705, "slot": "Weapon_1", "offhand": null },
+          { "id": 30163, "slot": "Weapon_2", "offhand": null },
+          { "id": 30860, "slot": "Weapon_3", "offhand": null },
+          { "id": 29855, "slot": "Weapon_4", "offhand": null },
+          { "id": 29740, "slot": "Weapon_5", "offhand": null }
+        ]
+      }
+    }
+  }
+}

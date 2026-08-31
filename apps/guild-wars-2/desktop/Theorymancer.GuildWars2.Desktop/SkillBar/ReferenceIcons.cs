@@ -13,6 +13,7 @@ public sealed class ReferenceIcons
     private readonly GuildWars2ApiConfiguration _apiConfiguration;
     private readonly string _cacheDirectory;
     private readonly string _manifestPath;
+    private readonly Lazy<IconManifest> _manifest;
 
     public ReferenceIcons(
         GuildWars2ApiClient apiClient,
@@ -32,12 +33,19 @@ public sealed class ReferenceIcons
             "assets",
             "guild-wars-2",
             "icons.manifest.json");
+        _manifest = new Lazy<IconManifest>(LoadManifestCore);
     }
 
     public async Task<string> GetNightfallPathAsync(CancellationToken cancellationToken)
     {
+        return await GetSkillPathAsync(NightfallSkillId, cancellationToken);
+    }
+
+    public async Task<string> GetSkillPathAsync(int skillId, CancellationToken cancellationToken)
+    {
         var manifest = LoadManifest();
-        var icon = manifest.Skills.Single(icon => icon.SkillId == NightfallSkillId);
+        var icon = manifest.Skills.SingleOrDefault(icon => icon.SkillId == skillId)
+            ?? throw new InvalidOperationException($"The packaged icon manifest does not contain skill {skillId}.");
         var asset = manifest.Assets.Single(asset => asset.AssetId == icon.AssetId);
         Directory.CreateDirectory(_cacheDirectory);
         var path = Path.Combine(_cacheDirectory, $"{asset.AssetId}.png");
@@ -54,7 +62,15 @@ public sealed class ReferenceIcons
         return path;
     }
 
-    private IconManifest LoadManifest()
+    public ReferenceSkillIcon? FindSkill(int skillId)
+    {
+        var icon = LoadManifest().Skills.SingleOrDefault(entry => entry.SkillId == skillId);
+        return icon is null ? null : new ReferenceSkillIcon(icon.SkillId, icon.Name, icon.AssetId);
+    }
+
+    private IconManifest LoadManifest() => _manifest.Value;
+
+    private IconManifest LoadManifestCore()
     {
         var manifest = JsonSerializer.Deserialize<IconManifest>(File.ReadAllText(_manifestPath), JsonOptions);
         return manifest is { Version: 2, Assets.Count: > 0, Skills.Count: > 0 }
@@ -75,3 +91,5 @@ public sealed class ReferenceIcons
         [property: JsonPropertyName("name")] string Name,
         [property: JsonPropertyName("icon_asset_id")] string AssetId);
 }
+
+public sealed record ReferenceSkillIcon(int SkillId, string Name, string AssetId);

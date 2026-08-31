@@ -7,7 +7,7 @@ namespace Theorymancer.GuildWars2.Desktop.Tests;
 public sealed class ReferenceIconsAuthenticationTests
 {
     [Fact]
-    public async Task GetNightfallPath_RequiresAuthenticationBeforeDownloading()
+    public async Task GetSkillPath_RequiresAuthenticationBeforeDownloading()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"theorymancer-icons-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -33,8 +33,8 @@ public sealed class ReferenceIconsAuthenticationTests
                 """
                 {
                   "version": 2,
-                  "assets": [{ "asset_id": "nightfall-asset" }],
-                  "skills": [{ "skill_id": 29855, "name": "Nightfall", "icon_asset_id": "nightfall-asset" }]
+                  "assets": [{ "asset_id": "dusk-strike-asset" }],
+                  "skills": [{ "skill_id": 29705, "name": "Dusk Strike", "icon_asset_id": "dusk-strike-asset" }]
                 }
                 """);
             var handler = new UnexpectedRequestHandler();
@@ -47,7 +47,7 @@ public sealed class ReferenceIconsAuthenticationTests
                 manifestPath);
 
             var exception = await Assert.ThrowsAsync<AuthenticationRequiredException>(
-                () => icons.GetNightfallPathAsync(CancellationToken.None));
+                () => icons.GetSkillPathAsync(29705, CancellationToken.None));
 
             Assert.Contains("Sign in", exception.Message, StringComparison.Ordinal);
             Assert.False(handler.WasCalled);

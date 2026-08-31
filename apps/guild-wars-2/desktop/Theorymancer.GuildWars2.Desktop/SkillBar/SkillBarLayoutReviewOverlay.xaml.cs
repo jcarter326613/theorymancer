@@ -15,20 +15,20 @@ public partial class SkillBarLayoutReviewOverlay : Window
     private readonly CalibratedRegion _skillBarRegion;
     private readonly IReadOnlyList<CalibratedRegion> _contextRegions;
     private readonly SkillBarLayoutDetection _detection;
-    private readonly IconTemplateMatch? _nightfallMatch;
+    private readonly IReadOnlyList<SkillBarSlotMatch> _matches;
 
     public SkillBarLayoutReviewOverlay(
         ScreenBounds clientBounds,
         CalibratedRegion skillBarRegion,
         IReadOnlyList<CalibratedRegion> contextRegions,
         SkillBarLayoutDetection detection,
-        IconTemplateMatch? nightfallMatch)
+        IReadOnlyList<SkillBarSlotMatch> matches)
     {
         _clientBounds = clientBounds;
         _skillBarRegion = skillBarRegion;
         _contextRegions = contextRegions;
         _detection = detection;
-        _nightfallMatch = nightfallMatch;
+        _matches = matches;
         InitializeComponent();
         Left = clientBounds.X;
         Top = clientBounds.Y;
@@ -87,36 +87,28 @@ public partial class SkillBarLayoutReviewOverlay : Window
             RenderOcrEvidence(skillBarBounds);
         }
 
-        if (_nightfallMatch is { } nightfallMatch)
-        {
-            AddVisual(
-                new ScreenBounds(
-                    skillBarBounds.X + nightfallMatch.Bounds.X,
-                    skillBarBounds.Y + nightfallMatch.Bounds.Y,
-                    nightfallMatch.Bounds.Width,
-                    nightfallMatch.Bounds.Height),
-                $"Nightfall {nightfallMatch.Score:P0}",
-                Brushes.OrangeRed,
-                48);
-        }
-
         if (_detection.Layout is null)
         {
             return;
         }
 
         var slotBrush = _detection.Confidence >= 0.75 ? Brushes.LimeGreen : Brushes.Goldenrod;
+        var matchesByKind = _matches.ToDictionary(match => match.Kind);
         foreach (var component in _detection.Layout.Components)
         {
             var localBounds = component.ToPixelBounds(skillBarBounds.Width, skillBarBounds.Height);
+            var match = matchesByKind.GetValueOrDefault(component.Kind);
+            var label = match?.Skill is { } skill
+                ? $"{skill.Name} {match.Score:P0}"
+                : $"{component.Kind.ToString().Replace("WeaponSkill", "Weapon ")}: {match?.Message ?? "Unknown"}";
             AddVisual(
                 new ScreenBounds(
                     skillBarBounds.X + localBounds.X,
                     skillBarBounds.Y + localBounds.Y,
                     localBounds.Width,
                     localBounds.Height),
-                component.Kind.ToString().Replace("WeaponSkill", "Weapon "),
-                slotBrush,
+                label,
+                match?.Skill is null ? Brushes.Goldenrod : slotBrush,
                 42);
         }
     }
