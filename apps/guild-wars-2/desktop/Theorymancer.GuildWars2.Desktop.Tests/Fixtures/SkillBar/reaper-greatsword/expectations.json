@@ -1,15 +1,15 @@
 {
   "screenshot": "screenshot.jpg",
   "slots": [
-    { "kind": "WeaponSkill1", "skillId": 29705, "name": "Dusk Strike", "x": 0.067, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "29705.png", "iconSha256": "2B143BBDD34C9DF7924034D92BAF5B091C3259A16BCC9124ED53F3B80397ED65" },
-    { "kind": "WeaponSkill2", "skillId": 30163, "name": "Gravedigger", "x": 0.139, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "30163.png", "iconSha256": "BDCC0E4228BBA26F57981A599B241AC444971C39BF28F941520DE968734FB914" },
-    { "kind": "WeaponSkill3", "skillId": 30860, "name": "Death Spiral", "x": 0.211, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "30860.png", "iconSha256": "B93553AF815CD1F66B7208263FD5E270FBE9C08BB184164DE2DE4997436D89AE" },
-    { "kind": "WeaponSkill4", "skillId": 29855, "name": "Nightfall", "x": 0.283, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "29855.png", "iconSha256": "21D0D01D269B0F0A1E708A301E8E08E70B717F05C1721DD29B9A31415ACAC581" },
-    { "kind": "WeaponSkill5", "skillId": 29740, "name": "Grasping Darkness", "x": 0.355, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "29740.png", "iconSha256": "D5D7AA3EA3AF3AB8930E269430528B5A7551005701855EB1724BF7B481CEC653" },
-    { "kind": "HealSkill", "skillId": 21762, "name": "Signet of Vampirism", "x": 0.568, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "21762.png", "iconSha256": "55CF8B4ABDF0CAE304B1E78425E65FE445DF52447190E4BDB4D9D82BB6A88F78" },
-    { "kind": "UtilitySkill1", "skillId": 30670, "name": "\"Suffer!\"", "x": 0.641, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "30670.png", "iconSha256": "3580429FBE000F7A707E0C504355146728B22D80ED06FF4D564228E034375F71" },
-    { "kind": "UtilitySkill2", "skillId": 29414, "name": "\"You Are All Weaklings!\"", "x": 0.713, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "29414.png", "iconSha256": "ED931B26426510EC5143084A1A452F7E2A68F5B080594BF55532E47F165F37F1" },
-    { "kind": "UtilitySkill3", "skillId": 30772, "name": "\"Rise!\"", "x": 0.785, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "30772.png", "iconSha256": "507C21DFAFC3FCC1174A8286BDC87D6B4E1490305B615CD9CD4D0C8C29902B8A" },
-    { "kind": "EliteSkill", "skillId": 30105, "name": "\"Chilled to the Bone!\"", "x": 0.857, "y": 0.510, "width": 0.071, "height": 0.380, "iconFile": "30105.png", "iconSha256": "C1CFDFECADDEAB66F0EC7F20A55423E7724D7CD292014BC379C61B482CE317F8" }
+    { "kind": "WeaponSkill1", "skillId": 29705, "name": "Dusk Strike", "x": 73, "y": 121, "width": 80, "height": 80, "iconFile": "29705.png", "iconSha256": "2B143BBDD34C9DF7924034D92BAF5B091C3259A16BCC9124ED53F3B80397ED65" },
+    { "kind": "WeaponSkill2", "skillId": 30163, "name": "Gravedigger", "x": 157, "y": 121, "width": 80, "height": 80, "iconFile": "30163.png", "iconSha256": "BDCC0E4228BBA26F57981A599B241AC444971C39BF28F941520DE968734FB914" },
+    { "kind": "WeaponSkill3", "skillId": 30860, "name": "Death Spiral", "x": 240, "y": 121, "width": 80, "height": 80, "iconFile": "30860.png", "iconSha256": "B93553AF815CD1F66B7208263FD5E270FBE9C08BB184164DE2DE4997436D89AE" },
+    { "kind": "WeaponSkill4", "skillId": 29855, "name": "Nightfall", "x": 322, "y": 121, "width": 80, "height": 80, "iconFile": "29855.png", "iconSha256": "21D0D01D269B0F0A1E708A301E8E08E70B717F05C1721DD29B9A31415ACAC581" },
+    { "kind": "WeaponSkill5", "skillId": 29740, "name": "Grasping Darkness", "x": 405, "y": 121, "width": 80, "height": 80, "iconFile": "29740.png", "iconSha256": "D5D7AA3EA3AF3AB8930E269430528B5A7551005701855EB1724BF7B481CEC653" },
+    { "kind": "HealSkill", "skillId": 21762, "name": "Signet of Vampirism", "x": 636, "y": 121, "width": 80, "height": 80, "iconFile": "21762.png", "iconSha256": "55CF8B4ABDF0CAE304B1E78425E65FE445DF52447190E4BDB4D9D82BB6A88F78" },
+    { "kind": "UtilitySkill1", "skillId": 30670, "name": "\"Suffer!\"", "x": 718, "y": 121, "width": 80, "height": 80, "iconFile": "30670.png", "iconSha256": "3580429FBE000F7A707E0C504355146728B22D80ED06FF4D564228E034375F71" },
+    { "kind": "UtilitySkill2", "skillId": 29414, "name": "\"You Are All Weaklings!\"", "x": 801, "y": 121, "width": 80, "height": 80, "iconFile": "29414.png", "iconSha256": "ED931B26426510EC5143084A1A452F7E2A68F5B080594BF55532E47F165F37F1" },
+    { "kind": "UtilitySkill3", "skillId": 30772, "name": "\"Rise!\"", "x": 883, "y": 121, "width": 80, "height": 80, "iconFile": "30772.png", "iconSha256": "507C21DFAFC3FCC1174A8286BDC87D6B4E1490305B615CD9CD4D0C8C29902B8A" },
+    { "kind": "EliteSkill", "skillId": 30105, "name": "\"Chilled to the Bone!\"", "x": 966, "y": 121, "width": 80, "height": 80, "iconFile": "30105.png", "iconSha256": "C1CFDFECADDEAB66F0EC7F20A55423E7724D7CD292014BC379C61B482CE317F8" }
   ]
 }

@@ -16,6 +16,15 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
         Assert.Equal(Enum.GetValues<SkillBarComponentKind>(), fixture.Slots.Select(slot => slot.ComponentKind));
         Assert.Equal(fixture.Slots.Count, fixture.Slots.Select(slot => slot.SkillId).Distinct().Count());
 
+        using var screenshot = new Bitmap(Path.Combine(ScenarioDirectory, fixture.Screenshot));
+        foreach (var slot in fixture.Slots)
+        {
+            Assert.InRange(slot.X, 0, screenshot.Width - 1);
+            Assert.InRange(slot.Y, 0, screenshot.Height - 1);
+            Assert.InRange(slot.Width, 1, screenshot.Width - slot.X);
+            Assert.InRange(slot.Height, 1, screenshot.Height - slot.Y);
+        }
+
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(FixturesDirectory, "icons.manifest.json")));
         var skillsById = manifest.RootElement
             .GetProperty("skills")
@@ -71,8 +80,11 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
         foreach (var expected in fixture.Slots)
         {
             var component = Assert.Single(layout.Components, component => component.Kind == expected.ComponentKind);
-            Assert.InRange(component.X + component.Width / 2, expected.CenterX - 0.05, expected.CenterX + 0.05);
-            Assert.InRange(component.Y + component.Height / 2, expected.CenterY - 0.05, expected.CenterY + 0.05);
+            AssertBoundsNear(
+                component.ToPixelBounds(frame.Width, frame.Height),
+                expected.ToBounds(scaleFactor),
+                scaleFactor,
+                expected.ComponentKind);
         }
     }
 
@@ -88,7 +100,7 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
 
         foreach (var expected in fixture.Slots)
         {
-            var bounds = expected.ToBounds(frame.Width, frame.Height);
+            var bounds = expected.ToBounds(scaleFactor);
             var matches = fixture.Slots
                 .Select(candidate => IconTemplateMatcher.MatchAt(
                     frame,
@@ -180,22 +192,35 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
         string Kind,
         int SkillId,
         string Name,
-        double X,
-        double Y,
-        double Width,
-        double Height,
+        int X,
+        int Y,
+        int Width,
+        int Height,
         string IconFile,
         string IconSha256)
     {
         public SkillBarComponentKind ComponentKind => Enum.Parse<SkillBarComponentKind>(Kind);
-        public double CenterX => X + Width / 2;
-        public double CenterY => Y + Height / 2;
+        public ScreenBounds ToBounds(double scaleFactor) => new(
+            (int)Math.Round(X * scaleFactor),
+            (int)Math.Round(Y * scaleFactor),
+            Math.Max(1, (int)Math.Round(Width * scaleFactor)),
+            Math.Max(1, (int)Math.Round(Height * scaleFactor)));
+    }
 
-        public ScreenBounds ToBounds(int frameWidth, int frameHeight) => new(
-            (int)Math.Round(X * frameWidth),
-            (int)Math.Round(Y * frameHeight),
-            Math.Max(1, (int)Math.Round(Width * frameWidth)),
-            Math.Max(1, (int)Math.Round(Height * frameHeight)));
+    private static void AssertBoundsNear(
+        ScreenBounds actual,
+        ScreenBounds expected,
+        double scaleFactor,
+        SkillBarComponentKind kind)
+    {
+        var tolerance = Math.Max(2, (int)Math.Ceiling(6 * scaleFactor));
+        Assert.True(
+            Math.Abs(actual.X - expected.X) <= tolerance &&
+            Math.Abs(actual.Y - expected.Y) <= tolerance &&
+            Math.Abs(actual.Width - expected.Width) <= tolerance &&
+            Math.Abs(actual.Height - expected.Height) <= tolerance,
+            $"{kind}: expected ({expected.X}, {expected.Y}, {expected.Width}, {expected.Height}) +/- {tolerance}; " +
+            $"detected ({actual.X}, {actual.Y}, {actual.Width}, {actual.Height}).");
     }
 
     private sealed record BuildInput(
