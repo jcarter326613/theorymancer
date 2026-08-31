@@ -15,20 +15,20 @@ public partial class SkillBarLayoutReviewOverlay : Window
     private readonly CalibratedRegion _skillBarRegion;
     private readonly IReadOnlyList<CalibratedRegion> _contextRegions;
     private readonly SkillBarLayoutDetection _detection;
-    private readonly IconTemplateMatch? _nightfallMatch;
+    private readonly IReadOnlyList<SkillBarSlotMatch> _matches;
 
     public SkillBarLayoutReviewOverlay(
         ScreenBounds clientBounds,
         CalibratedRegion skillBarRegion,
         IReadOnlyList<CalibratedRegion> contextRegions,
         SkillBarLayoutDetection detection,
-        IconTemplateMatch? nightfallMatch)
+        IReadOnlyList<SkillBarSlotMatch> matches)
     {
         _clientBounds = clientBounds;
         _skillBarRegion = skillBarRegion;
         _contextRegions = contextRegions;
         _detection = detection;
-        _nightfallMatch = nightfallMatch;
+        _matches = matches;
         InitializeComponent();
         Left = clientBounds.X;
         Top = clientBounds.Y;
@@ -58,14 +58,6 @@ public partial class SkillBarLayoutReviewOverlay : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void ShowOcrEvidence_Changed(object sender, RoutedEventArgs e)
-    {
-        if (IsLoaded)
-        {
-            RenderRegions();
-        }
-    }
-
     private void RenderRegions()
     {
         OverlayCanvas.Children.Clear();
@@ -82,78 +74,37 @@ public partial class SkillBarLayoutReviewOverlay : Window
 
         var skillBarBounds = _skillBarRegion.Crop.ToScreenBounds(_clientBounds);
         AddVisual(skillBarBounds, "Skill bar", Brushes.DeepSkyBlue, 34);
-        if (ShowOcrEvidenceCheckBox.IsChecked == true)
-        {
-            RenderOcrEvidence(skillBarBounds);
-        }
-
-        if (_nightfallMatch is { } nightfallMatch)
-        {
-            AddVisual(
-                new ScreenBounds(
-                    skillBarBounds.X + nightfallMatch.Bounds.X,
-                    skillBarBounds.Y + nightfallMatch.Bounds.Y,
-                    nightfallMatch.Bounds.Width,
-                    nightfallMatch.Bounds.Height),
-                $"Nightfall {nightfallMatch.Score:P0}",
-                Brushes.OrangeRed,
-                48);
-        }
-
         if (_detection.Layout is null)
         {
             return;
         }
 
         var slotBrush = _detection.Confidence >= 0.75 ? Brushes.LimeGreen : Brushes.Goldenrod;
+        var matchesByKind = _matches.ToDictionary(match => match.Kind);
         foreach (var component in _detection.Layout.Components)
         {
             var localBounds = component.ToPixelBounds(skillBarBounds.Width, skillBarBounds.Height);
+            var match = matchesByKind.GetValueOrDefault(component.Kind);
+            var label = match?.Skill is { } skill
+                ? $"{skill.Name} {match.Score:P0}"
+                : $"{component.Kind.ToString().Replace("WeaponSkill", "Weapon ")}: {match?.Message ?? "Unknown"}";
             AddVisual(
                 new ScreenBounds(
                     skillBarBounds.X + localBounds.X,
                     skillBarBounds.Y + localBounds.Y,
                     localBounds.Width,
                     localBounds.Height),
-                component.Kind.ToString().Replace("WeaponSkill", "Weapon "),
-                slotBrush,
+                label,
+                match?.Skill is null ? Brushes.Goldenrod : slotBrush,
                 42);
         }
     }
 
-    private void RenderOcrEvidence(ScreenBounds skillBarBounds)
-    {
-        foreach (var word in _detection.DebugInfo.RecognizedWords)
-        {
-            AddVisual(ToScreenBounds(skillBarBounds, word), word.Text, Brushes.Cyan, 24);
-        }
-
-        foreach (var word in _detection.DebugInfo.SelectedLabels)
-        {
-            AddVisual(ToScreenBounds(skillBarBounds, word), $"Selected: {word.Text}", Brushes.MediumPurple, 48);
-        }
-    }
-
-    private static ScreenBounds ToScreenBounds(ScreenBounds skillBarBounds, HudOcrWord word) => new(
-        skillBarBounds.X + (int)Math.Floor(word.X),
-        skillBarBounds.Y + (int)Math.Floor(word.Y),
-        Math.Max(1, (int)Math.Ceiling(word.Width)),
-        Math.Max(1, (int)Math.Ceiling(word.Height)));
-
     private static string FormatDiagnostics(SkillBarLayoutDebugInfo debugInfo)
     {
-        var selectedLabels = debugInfo.SelectedLabels.Count == 0
-            ? "none"
-            : string.Join(", ", debugInfo.SelectedLabels.Select(word => $"{word.Text}@{word.X:F0},{word.Y:F0}"));
-        var words = debugInfo.RecognizedWords.Count == 0
-            ? "none"
-            : string.Join(", ", debugInfo.RecognizedWords.Take(12).Select(word => $"{word.Text}@{word.X:F0},{word.Y:F0}"));
-        var remainingWordCount = debugInfo.RecognizedWords.Count - Math.Min(12, debugInfo.RecognizedWords.Count);
         return
-            $"OCR words ({debugInfo.RecognizedWords.Count}): {words}{(remainingWordCount > 0 ? $", +{remainingWordCount} more" : string.Empty)}\n" +
-            $"Selected labels: {selectedLabels}\n" +
-            $"Spacing: {FormatNumber(debugInfo.LabelSpacing)}; label confidence: {FormatNumber(debugInfo.LabelConfidence)}\n" +
-            $"Square: {debugInfo.SquareSize?.ToString() ?? "n/a"}; x offset: {debugInfo.HorizontalOffset?.ToString() ?? "n/a"}; top: {debugInfo.SquareTop?.ToString() ?? "n/a"}; border evidence: {FormatNumber(debugInfo.BorderEvidence)}";
+            $"Anchor skill: {debugInfo.AnchorSkillId?.ToString() ?? "n/a"}; anchor score: {FormatNumber(debugInfo.AnchorScore)}\n" +
+            $"Refined icon size: {debugInfo.IconSize?.ToString() ?? "n/a"}; x: {debugInfo.AnchorX?.ToString() ?? "n/a"}; y: {debugInfo.AnchorY?.ToString() ?? "n/a"}; spacing: {FormatNumber(debugInfo.SlotSpacing)}; match score: {FormatNumber(debugInfo.MatchScore)}";
     }
 
     private static string FormatNumber(double? value) => value is null ? "n/a" : value.Value.ToString("F3");

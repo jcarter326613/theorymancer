@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Theorymancer.GuildWars2.Desktop.ArenaNet;
 using Theorymancer.GuildWars2.Desktop.Capture;
 using Theorymancer.GuildWars2.Desktop.SkillBar;
 
@@ -11,6 +12,7 @@ public partial class CalibrationDialog : Window
     private readonly SelectedGameWindow _gameWindow;
     private readonly IReadOnlyList<CalibratedRegion> _otherRegions;
     private readonly ReferenceIcons _referenceIcons;
+    private readonly BuildSkillCandidates _buildCandidates;
     private NormalizedCrop? _combatLogCrop;
     private NormalizedCrop? _skillBarCrop;
     private SkillBarLayout? _skillBarLayout;
@@ -19,10 +21,12 @@ public partial class CalibrationDialog : Window
     public CalibrationDialog(
         SelectedGameWindow gameWindow,
         CollectorSettings settings,
-        ReferenceIcons referenceIcons)
+        ReferenceIcons referenceIcons,
+        BuildSkillCandidates buildCandidates)
     {
         _gameWindow = gameWindow;
         _referenceIcons = referenceIcons;
+        _buildCandidates = buildCandidates;
         _otherRegions = settings.Regions
             .Where(region => region.Id != CalibratedRegion.CombatLogId && region.Id != CalibratedRegion.SkillBarId)
             .ToList();
@@ -70,14 +74,11 @@ public partial class CalibrationDialog : Window
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
             var capture = new VisibleScreenRegionCapture(_gameWindow, region.Crop);
             var frame = await capture.CaptureAsync(CancellationToken.None);
-            var words = await WindowsHudOcrEngine.CreateEnglish().RecognizeWordsAsync(frame, CancellationToken.None);
-            var detection = SkillBarLayoutDetector.Detect(frame, words);
-            var nightfallIconPath = await _referenceIcons.GetNightfallPathAsync(CancellationToken.None);
-            var nightfallMatch = IconTemplateMatcher.FindBestMatch(
-                frame,
-                nightfallIconPath,
-                "Nightfall",
-                ReferenceIcons.NightfallSkillId);
+            var templates = await LoadSkillBarTemplatesAsync(CancellationToken.None);
+            var detection = SkillBarLayoutDetector.Detect(frame, templates);
+            var matches = detection.Layout is { } detectedLayout
+                ? await new SkillBarIconMatcher(_referenceIcons).MatchAsync(frame, detectedLayout, _buildCandidates, CancellationToken.None)
+                : [];
             if (!_gameWindow.TryGetClientBounds(out var clientBounds))
             {
                 throw new InvalidOperationException("Guild Wars 2 is no longer available. Select its window again.");
@@ -88,7 +89,7 @@ public partial class CalibrationDialog : Window
                 region,
                 BuildContextRegions(region.Crop),
                 detection,
-                nightfallMatch)
+                matches)
             {
                 Owner = this,
             };
@@ -124,7 +125,7 @@ public partial class CalibrationDialog : Window
     private bool IsComplete =>
         _combatLogCrop is not null &&
         _skillBarCrop is not null &&
-        _skillBarLayout is { HasWeaponSkillSlots: true };
+        _skillBarLayout is { HasSkillSlots: true };
 
     private CalibratedRegion? PromptForRegion(
         string regionId,
@@ -162,6 +163,27 @@ public partial class CalibrationDialog : Window
         return regions;
     }
 
+    private async Task<IReadOnlyList<SkillBarIconTemplate>> LoadSkillBarTemplatesAsync(CancellationToken cancellationToken)
+    {
+        var templates = new List<SkillBarIconTemplate>();
+        foreach (var (kind, skillIds) in _buildCandidates.SkillIdsBySlot)
+        {
+            foreach (var skillId in skillIds)
+            {
+                var skill = _referenceIcons.FindSkill(skillId);
+                if (skill is null)
+                {
+                    continue;
+                }
+
+                var path = await _referenceIcons.GetSkillPathAsync(skillId, cancellationToken);
+                templates.Add(new SkillBarIconTemplate(kind, skill.Name, skill.SkillId, path));
+            }
+        }
+
+        return templates;
+    }
+
     private void RefreshPreviewOverlay()
     {
         ClosePreviewOverlay();
@@ -191,7 +213,7 @@ public partial class CalibrationDialog : Window
     private void UpdateControls()
     {
         UpdateStatus(CombatLogStatusText, _combatLogCrop is not null);
-        UpdateStatus(SkillBarStatusText, _skillBarCrop is not null && _skillBarLayout is { HasWeaponSkillSlots: true });
+        UpdateStatus(SkillBarStatusText, _skillBarCrop is not null && _skillBarLayout is { HasSkillSlots: true });
         SaveButton.IsEnabled = IsComplete;
     }
 

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Theorymancer GW2 Screen Collector"
         Width="760"
-        Height="540"
+        Height="620"
         MinWidth="640"
         MinHeight="420"
         Closing="OnClosing">
@@ -23,13 +23,31 @@
       <TextBlock Margin="0,6,0,0" Foreground="DimGray" TextWrapping="Wrap">
         Captures the visible combat-log region. Calibrate both the combat log and skill bar before recording.
       </TextBlock>
-      <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
         <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Theorymancer account:" />
         <TextBlock Margin="8,0,12,0" VerticalAlignment="Center" Text="{Binding AuthenticationStatus}" />
         <Button x:Name="SignInButton" Padding="10,4" Click="SignIn_Click" Content="Sign in" />
-        <Button x:Name="SignOutButton" Margin="8,0,0,0" Padding="10,4" Click="SignOut_Click" Content="Sign out" />
+          <Button x:Name="SignOutButton" Margin="8,0,0,0" Padding="10,4" Click="SignOut_Click" Content="Sign out" />
+        </StackPanel>
+        <Border Margin="0,12,0,0" Padding="10" BorderBrush="Gainsboro" BorderThickness="1">
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="ArenaNet build" />
+            <TextBlock Margin="0,3,0,0" Foreground="DimGray" FontSize="12" TextWrapping="Wrap"
+                       Text="Enter an API key with account, characters, and builds permissions. It is encrypted for this Windows user and is sent only to api.guildwars2.com." />
+            <WrapPanel Margin="0,8,0,0">
+              <PasswordBox x:Name="ArenaNetApiKeyBox" Width="300" Padding="7,4" VerticalContentAlignment="Center" />
+              <Button Margin="8,0,0,0" Padding="10,4" Click="ConnectArenaNet_Click" Content="Connect key" />
+              <Button Margin="8,0,0,0" Padding="10,4" Click="ClearArenaNetKey_Click" Content="Forget key" />
+            </WrapPanel>
+            <WrapPanel Margin="0,8,0,0">
+              <TextBlock VerticalAlignment="Center" Text="Character:" />
+              <ComboBox x:Name="ArenaNetCharacterComboBox" Width="220" Margin="8,0,0,0" ItemsSource="{Binding ArenaNetCharacters}" SelectionChanged="ArenaNetCharacter_Changed" />
+              <Button Margin="8,0,0,0" Padding="10,4" Click="LoadArenaNetBuild_Click" Content="Load active build" />
+            </WrapPanel>
+            <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="12" Text="{Binding ArenaNetStatus}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
       </StackPanel>
-    </StackPanel>
 
     <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>

@@ -6,7 +6,8 @@ namespace Theorymancer.GuildWars2.Desktop.Calibration;
 
 public sealed record CollectorSettings(
     IReadOnlyList<CalibratedRegion> Regions,
-    SkillBarLayout? SkillBarLayout = null)
+    SkillBarLayout? SkillBarLayout = null,
+    string? ArenaNetCharacterName = null)
 {
     public static CollectorSettings Default { get; } = new(Array.Empty<CalibratedRegion>());
 

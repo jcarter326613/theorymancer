@@ -45,7 +45,7 @@
       </Grid.ColumnDefinitions>
       <StackPanel>
         <TextBlock FontWeight="SemiBold" Text="Skill bar" />
-        <TextBlock Foreground="DimGray" FontSize="12" Text="Required now; its five weapon slots are reviewed before calibration is saved." />
+        <TextBlock Foreground="DimGray" FontSize="12" Text="Keys 1 through 0 are matched against the selected character's active build before calibration is saved." />
       </StackPanel>
       <TextBlock x:Name="SkillBarStatusText" Grid.Column="1" VerticalAlignment="Center" TextAlignment="Right" />
       <Button Grid.Column="2" Margin="16,0,0,0" Padding="12,6" Click="CalibrateSkillBar_Click" Content="Calibrate" />
