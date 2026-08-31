@@ -20,7 +20,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly DesktopAuthenticationService _authentication;
     private readonly ReferenceIcons _referenceIcons;
     private readonly ArenaNetApiKeyStore _arenaNetApiKeyStore;
-    private readonly IArenaNetApiClient _arenaNetApiClient;
+    private readonly ArenaNetAccountLoader _arenaNetAccountLoader;
     private readonly ArenaNetBuildLoader _arenaNetBuildLoader;
     private readonly CancellationToken _shutdownToken;
     private CollectorSettings _settings;
@@ -44,7 +44,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _authentication = authentication;
         _referenceIcons = referenceIcons;
         _arenaNetApiKeyStore = arenaNetApiKeyStore;
-        _arenaNetApiClient = arenaNetApiClient;
+        _arenaNetAccountLoader = new ArenaNetAccountLoader(arenaNetApiClient);
         _arenaNetBuildLoader = new ArenaNetBuildLoader(arenaNetApiClient);
         _shutdownToken = shutdownToken;
         InitializeComponent();
@@ -52,10 +52,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _settings = _settingsStore.Load();
         _authentication.StateChanged += Authentication_StateChanged;
         UpdateAuthenticationControls();
-        if (_arenaNetApiKeyStore.Load() is not null)
-        {
-            ArenaNetStatus = "ArenaNet API key configured. Connect to select a character.";
-        }
+        Loaded += MainWindow_Loaded;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -165,6 +162,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async void ConnectArenaNet_Click(object sender, RoutedEventArgs e)
     {
         var apiKey = ArenaNetApiKeyBox.Password;
+        var saveApiKey = !string.IsNullOrWhiteSpace(apiKey);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             apiKey = _arenaNetApiKeyStore.Load() ?? string.Empty;
@@ -178,31 +176,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            ArenaNetStatus = "Validating ArenaNet API key...";
-            var token = await _arenaNetApiClient.GetTokenInfoAsync(apiKey, _shutdownToken);
-            var requiredPermissions = new[] { "account", "characters", "builds" };
-            var missingPermissions = requiredPermissions
-                .Where(permission => !token.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-            if (missingPermissions.Count > 0)
-            {
-                throw new InvalidOperationException($"The ArenaNet API key must include: {string.Join(", ", missingPermissions)}.");
-            }
-
-            var characters = await _arenaNetApiClient.GetCharactersAsync(apiKey, _shutdownToken);
-            _arenaNetApiKeyStore.Save(apiKey);
+            await LoadArenaNetAccountAsync(apiKey, saveApiKey);
             ArenaNetApiKeyBox.Password = string.Empty;
-            ArenaNetCharacters.Clear();
-            foreach (var character in characters)
-            {
-                ArenaNetCharacters.Add(character);
-            }
-
-            ArenaNetCharacterComboBox.SelectedItem = ArenaNetCharacters.FirstOrDefault(character =>
-                string.Equals(character, _settings.ArenaNetCharacterName, StringComparison.Ordinal));
-            ArenaNetStatus = ArenaNetCharacters.Count == 0
-                ? "The ArenaNet account has no characters."
-                : "Select a character, then load its active build.";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -253,10 +228,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            ArenaNetStatus = $"Loading {characterName}'s active build...";
-            _loadedBuildCandidates = await _arenaNetBuildLoader.LoadAsync(apiKey, characterName, _shutdownToken);
-            var candidateCount = _loadedBuildCandidates.SkillIdsBySlot.Values.Sum(skillIds => skillIds.Count);
-            ArenaNetStatus = $"Loaded {_loadedBuildCandidates.BuildName} ({_loadedBuildCandidates.Profession}); {candidateCount} icon candidates ready.";
+            await LoadArenaNetBuildAsync(apiKey, characterName);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -264,6 +236,79 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ArenaNetStatus = "ArenaNet build could not be loaded.";
             ShowSetupError($"ArenaNet build load failed: {exception.Message}");
         }
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        string? apiKey;
+        try
+        {
+            apiKey = _arenaNetApiKeyStore.Load();
+        }
+        catch (Exception exception)
+        {
+            ArenaNetStatus = $"The stored ArenaNet API key cannot be read: {exception.Message}";
+            return;
+        }
+
+        if (apiKey is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await LoadArenaNetAccountAsync(apiKey, saveApiKey: false);
+        }
+        catch (OperationCanceledException) when (_shutdownToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ArenaNetStatus = $"The stored ArenaNet API key could not be loaded: {exception.Message}";
+        }
+    }
+
+    private async Task LoadArenaNetAccountAsync(string apiKey, bool saveApiKey)
+    {
+        ArenaNetStatus = "Loading ArenaNet account...";
+        var account = await _arenaNetAccountLoader.LoadAsync(apiKey, _settings.ArenaNetCharacterName, _shutdownToken);
+        if (saveApiKey)
+        {
+            _arenaNetApiKeyStore.Save(apiKey);
+        }
+
+        ArenaNetCharacters.Clear();
+        foreach (var character in account.Characters)
+        {
+            ArenaNetCharacters.Add(character);
+        }
+
+        if (_settings.ArenaNetCharacterName is not null && account.SelectedCharacterName is null)
+        {
+            _settings = _settings with { ArenaNetCharacterName = null };
+            _settingsStore.Save(_settings);
+        }
+
+        ArenaNetCharacterComboBox.SelectedItem = account.SelectedCharacterName;
+        if (account.SelectedCharacterName is null)
+        {
+            ArenaNetStatus = account.Characters.Count == 0
+                ? "The ArenaNet account has no characters."
+                : "ArenaNet account loaded. Select a character to load its active build.";
+            return;
+        }
+
+        await LoadArenaNetBuildAsync(apiKey, account.SelectedCharacterName);
+    }
+
+    private async Task LoadArenaNetBuildAsync(string apiKey, string characterName)
+    {
+        ArenaNetStatus = $"Loading {characterName}'s active build...";
+        _loadedBuildCandidates = await _arenaNetBuildLoader.LoadAsync(apiKey, characterName, _shutdownToken);
+        var candidateCount = _loadedBuildCandidates.SkillIdsBySlot.Values.Sum(skillIds => skillIds.Count);
+        ArenaNetStatus = $"Loaded {_loadedBuildCandidates.BuildName} ({_loadedBuildCandidates.Profession}); {candidateCount} icon candidates ready.";
     }
 
     private async void Start_Click(object sender, RoutedEventArgs e)
