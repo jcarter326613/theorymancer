@@ -16,17 +16,27 @@ public sealed class SkillCooldownDetectorTests
         var fixture = LoadCooldownFixture(fixtureName);
         Assert.Equal(Enum.GetValues<SkillBarComponentKind>(), fixture.Slots.Select(slot => slot.ComponentKind));
         var frame = LoadFrame(Path.Combine(FixturesDirectory, fixtureName, fixture.Screenshot));
+        var layout = CreateLayout(frame, fixture.Slots);
+        var references = CreateReferences(fixture);
         var detection = new SkillCooldownDetector().Detect(
             frame,
-            CreateLayout(frame, fixture.Slots),
-            CreateReferences(fixture));
+            layout,
+            references);
 
         Assert.Equal(frame.QpcTimestamp, detection.QpcTimestamp);
         Assert.Equal(fixture.Slots.Count, detection.Observations.Count);
+        var stateErrors = new List<string>();
         foreach (var expected in fixture.Slots)
         {
             var observation = Assert.Single(detection.Observations, observation => observation.Kind == expected.ComponentKind);
-            Assert.Equal(expected.State, observation.State);
+            if (expected.State != observation.State)
+            {
+                stateErrors.Add(
+                    $"{expected.ComponentKind}: expected {expected.State}, got {observation.State}; " +
+                    $"confidence {observation.Confidence:F3}, visible wipe {observation.VisibleWipeFraction:F3}.");
+                continue;
+            }
+
             Assert.InRange(observation.Confidence, 0, 1);
             if (expected.State == SkillCooldownState.OnCooldown)
             {
@@ -38,6 +48,12 @@ public sealed class SkillCooldownDetectorTests
                 Assert.Null(observation.VisibleWipeFraction);
             }
         }
+
+        Assert.True(
+            stateErrors.Count == 0,
+            string.Join(Environment.NewLine, stateErrors) + Environment.NewLine +
+            "Measurements: " + string.Join(", ", detection.Observations.Select(observation =>
+                $"{observation.Kind}={observation.VisibleWipeFraction:F3}")));
     }
 
     private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "SkillBar");
