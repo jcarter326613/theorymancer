@@ -1,0 +1,690 @@
+{
+  "captureStartedAtUtc": "2026-09-04T20:57:52.6015761+00:00",
+  "captureFramesPerSecond": 4,
+  "qpcFrequency": 10000000,
+  "captureWidth": 1101,
+  "captureHeight": 197,
+  "slots": [
+    {
+      "kind": "WeaponSkill1",
+      "x": 58,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "WeaponSkill2",
+      "x": 144,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "WeaponSkill3",
+      "x": 224,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "WeaponSkill4",
+      "x": 310,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "WeaponSkill5",
+      "x": 387,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "HealSkill",
+      "x": 618,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "UtilitySkill1",
+      "x": 702,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "UtilitySkill2",
+      "x": 786,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "UtilitySkill3",
+      "x": 870,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "kind": "EliteSkill",
+      "x": 948,
+      "y": 102,
+      "width": 80,
+      "height": 80
+    }
+  ],
+  "frames": [
+    {
+      "sequence": 1,
+      "file": "frames/000001.jpg",
+      "qpcTimestamp": 709436697799,
+      "elapsedQpc": 0,
+      "elapsedMilliseconds": 0
+    },
+    {
+      "sequence": 2,
+      "file": "frames/000002.jpg",
+      "qpcTimestamp": 709438779882,
+      "elapsedQpc": 2082083,
+      "elapsedMilliseconds": 208.2083
+    },
+    {
+      "sequence": 3,
+      "file": "frames/000003.jpg",
+      "qpcTimestamp": 709441279181,
+      "elapsedQpc": 4581382,
+      "elapsedMilliseconds": 458.1382
+    },
+    {
+      "sequence": 4,
+      "file": "frames/000004.jpg",
+      "qpcTimestamp": 709443941699,
+      "elapsedQpc": 7243900,
+      "elapsedMilliseconds": 724.39
+    },
+    {
+      "sequence": 5,
+      "file": "frames/000005.jpg",
+      "qpcTimestamp": 709446513076,
+      "elapsedQpc": 9815277,
+      "elapsedMilliseconds": 981.5277
+    },
+    {
+      "sequence": 6,
+      "file": "frames/000006.jpg",
+      "qpcTimestamp": 709448949517,
+      "elapsedQpc": 12251718,
+      "elapsedMilliseconds": 1225.1718
+    },
+    {
+      "sequence": 7,
+      "file": "frames/000007.jpg",
+      "qpcTimestamp": 709451440278,
+      "elapsedQpc": 14742479,
+      "elapsedMilliseconds": 1474.2479
+    },
+    {
+      "sequence": 8,
+      "file": "frames/000008.jpg",
+      "qpcTimestamp": 709453941696,
+      "elapsedQpc": 17243897,
+      "elapsedMilliseconds": 1724.3897
+    },
+    {
+      "sequence": 9,
+      "file": "frames/000009.jpg",
+      "qpcTimestamp": 709456467196,
+      "elapsedQpc": 19769397,
+      "elapsedMilliseconds": 1976.9397
+    },
+    {
+      "sequence": 10,
+      "file": "frames/000010.jpg",
+      "qpcTimestamp": 709458945368,
+      "elapsedQpc": 22247569,
+      "elapsedMilliseconds": 2224.7569
+    },
+    {
+      "sequence": 11,
+      "file": "frames/000011.jpg",
+      "qpcTimestamp": 709461282489,
+      "elapsedQpc": 24584690,
+      "elapsedMilliseconds": 2458.469
+    },
+    {
+      "sequence": 12,
+      "file": "frames/000012.jpg",
+      "qpcTimestamp": 709463778806,
+      "elapsedQpc": 27081007,
+      "elapsedMilliseconds": 2708.1007
+    },
+    {
+      "sequence": 13,
+      "file": "frames/000013.jpg",
+      "qpcTimestamp": 709466307895,
+      "elapsedQpc": 29610096,
+      "elapsedMilliseconds": 2961.0096
+    },
+    {
+      "sequence": 14,
+      "file": "frames/000014.jpg",
+      "qpcTimestamp": 709468776695,
+      "elapsedQpc": 32078896,
+      "elapsedMilliseconds": 3207.8896
+    },
+    {
+      "sequence": 15,
+      "file": "frames/000015.jpg",
+      "qpcTimestamp": 709471443082,
+      "elapsedQpc": 34745283,
+      "elapsedMilliseconds": 3474.5283
+    },
+    {
+      "sequence": 16,
+      "file": "frames/000016.jpg",
+      "qpcTimestamp": 709473943999,
+      "elapsedQpc": 37246200,
+      "elapsedMilliseconds": 3724.62
+    },
+    {
+      "sequence": 17,
+      "file": "frames/000017.jpg",
+      "qpcTimestamp": 709476472152,
+      "elapsedQpc": 39774353,
+      "elapsedMilliseconds": 3977.4353
+    },
+    {
+      "sequence": 18,
+      "file": "frames/000018.jpg",
+      "qpcTimestamp": 709478948003,
+      "elapsedQpc": 42250204,
+      "elapsedMilliseconds": 4225.0204
+    },
+    {
+      "sequence": 19,
+      "file": "frames/000019.jpg",
+      "qpcTimestamp": 709481443068,
+      "elapsedQpc": 44745269,
+      "elapsedMilliseconds": 4474.5269
+    },
+    {
+      "sequence": 20,
+      "file": "frames/000020.jpg",
+      "qpcTimestamp": 709483941787,
+      "elapsedQpc": 47243988,
+      "elapsedMilliseconds": 4724.3988
+    },
+    {
+      "sequence": 21,
+      "file": "frames/000021.jpg",
+      "qpcTimestamp": 709486299298,
+      "elapsedQpc": 49601499,
+      "elapsedMilliseconds": 4960.1499
+    },
+    {
+      "sequence": 22,
+      "file": "frames/000022.jpg",
+      "qpcTimestamp": 709488779015,
+      "elapsedQpc": 52081216,
+      "elapsedMilliseconds": 5208.1216
+    },
+    {
+      "sequence": 23,
+      "file": "frames/000023.jpg",
+      "qpcTimestamp": 709491273701,
+      "elapsedQpc": 54575902,
+      "elapsedMilliseconds": 5457.5902
+    },
+    {
+      "sequence": 24,
+      "file": "frames/000024.jpg",
+      "qpcTimestamp": 709493775646,
+      "elapsedQpc": 57077847,
+      "elapsedMilliseconds": 5707.7847
+    },
+    {
+      "sequence": 25,
+      "file": "frames/000025.jpg",
+      "qpcTimestamp": 709496464670,
+      "elapsedQpc": 59766871,
+      "elapsedMilliseconds": 5976.6871
+    },
+    {
+      "sequence": 26,
+      "file": "frames/000026.jpg",
+      "qpcTimestamp": 709498945508,
+      "elapsedQpc": 62247709,
+      "elapsedMilliseconds": 6224.7709
+    },
+    {
+      "sequence": 27,
+      "file": "frames/000027.jpg",
+      "qpcTimestamp": 709501443434,
+      "elapsedQpc": 64745635,
+      "elapsedMilliseconds": 6474.5635
+    },
+    {
+      "sequence": 28,
+      "file": "frames/000028.jpg",
+      "qpcTimestamp": 709503946158,
+      "elapsedQpc": 67248359,
+      "elapsedMilliseconds": 6724.8359
+    },
+    {
+      "sequence": 29,
+      "file": "frames/000029.jpg",
+      "qpcTimestamp": 709506468050,
+      "elapsedQpc": 69770251,
+      "elapsedMilliseconds": 6977.0251
+    },
+    {
+      "sequence": 30,
+      "file": "frames/000030.jpg",
+      "qpcTimestamp": 709508943888,
+      "elapsedQpc": 72246089,
+      "elapsedMilliseconds": 7224.6089
+    },
+    {
+      "sequence": 31,
+      "file": "frames/000031.jpg",
+      "qpcTimestamp": 709511447288,
+      "elapsedQpc": 74749489,
+      "elapsedMilliseconds": 7474.9489
+    },
+    {
+      "sequence": 32,
+      "file": "frames/000032.jpg",
+      "qpcTimestamp": 709513940150,
+      "elapsedQpc": 77242351,
+      "elapsedMilliseconds": 7724.2351
+    },
+    {
+      "sequence": 33,
+      "file": "frames/000033.jpg",
+      "qpcTimestamp": 709516466764,
+      "elapsedQpc": 79768965,
+      "elapsedMilliseconds": 7976.8965
+    },
+    {
+      "sequence": 34,
+      "file": "frames/000034.jpg",
+      "qpcTimestamp": 709518943688,
+      "elapsedQpc": 82245889,
+      "elapsedMilliseconds": 8224.5889
+    },
+    {
+      "sequence": 35,
+      "file": "frames/000035.jpg",
+      "qpcTimestamp": 709521280105,
+      "elapsedQpc": 84582306,
+      "elapsedMilliseconds": 8458.2306
+    },
+    {
+      "sequence": 36,
+      "file": "frames/000036.jpg",
+      "qpcTimestamp": 709523944238,
+      "elapsedQpc": 87246439,
+      "elapsedMilliseconds": 8724.6439
+    },
+    {
+      "sequence": 37,
+      "file": "frames/000037.jpg",
+      "qpcTimestamp": 709526306554,
+      "elapsedQpc": 89608755,
+      "elapsedMilliseconds": 8960.8755
+    },
+    {
+      "sequence": 38,
+      "file": "frames/000038.jpg",
+      "qpcTimestamp": 709528776019,
+      "elapsedQpc": 92078220,
+      "elapsedMilliseconds": 9207.822
+    },
+    {
+      "sequence": 39,
+      "file": "frames/000039.jpg",
+      "qpcTimestamp": 709531274059,
+      "elapsedQpc": 94576260,
+      "elapsedMilliseconds": 9457.626
+    },
+    {
+      "sequence": 40,
+      "file": "frames/000040.jpg",
+      "qpcTimestamp": 709533942980,
+      "elapsedQpc": 97245181,
+      "elapsedMilliseconds": 9724.5181
+    },
+    {
+      "sequence": 41,
+      "file": "frames/000041.jpg",
+      "qpcTimestamp": 709536470567,
+      "elapsedQpc": 99772768,
+      "elapsedMilliseconds": 9977.2768
+    },
+    {
+      "sequence": 42,
+      "file": "frames/000042.jpg",
+      "qpcTimestamp": 709538944464,
+      "elapsedQpc": 102246665,
+      "elapsedMilliseconds": 10224.6665
+    },
+    {
+      "sequence": 43,
+      "file": "frames/000043.jpg",
+      "qpcTimestamp": 709541440911,
+      "elapsedQpc": 104743112,
+      "elapsedMilliseconds": 10474.3112
+    },
+    {
+      "sequence": 44,
+      "file": "frames/000044.jpg",
+      "qpcTimestamp": 709543943090,
+      "elapsedQpc": 107245291,
+      "elapsedMilliseconds": 10724.5291
+    },
+    {
+      "sequence": 45,
+      "file": "frames/000045.jpg",
+      "qpcTimestamp": 709546466160,
+      "elapsedQpc": 109768361,
+      "elapsedMilliseconds": 10976.8361
+    },
+    {
+      "sequence": 46,
+      "file": "frames/000046.jpg",
+      "qpcTimestamp": 709548941667,
+      "elapsedQpc": 112243868,
+      "elapsedMilliseconds": 11224.3868
+    },
+    {
+      "sequence": 47,
+      "file": "frames/000047.jpg",
+      "qpcTimestamp": 709551442068,
+      "elapsedQpc": 114744269,
+      "elapsedMilliseconds": 11474.4269
+    },
+    {
+      "sequence": 48,
+      "file": "frames/000048.jpg",
+      "qpcTimestamp": 709553943628,
+      "elapsedQpc": 117245829,
+      "elapsedMilliseconds": 11724.5829
+    },
+    {
+      "sequence": 49,
+      "file": "frames/000049.jpg",
+      "qpcTimestamp": 709556302042,
+      "elapsedQpc": 119604243,
+      "elapsedMilliseconds": 11960.4243
+    },
+    {
+      "sequence": 50,
+      "file": "frames/000050.jpg",
+      "qpcTimestamp": 709558776422,
+      "elapsedQpc": 122078623,
+      "elapsedMilliseconds": 12207.8623
+    },
+    {
+      "sequence": 51,
+      "file": "frames/000051.jpg",
+      "qpcTimestamp": 709561279912,
+      "elapsedQpc": 124582113,
+      "elapsedMilliseconds": 12458.2113
+    },
+    {
+      "sequence": 52,
+      "file": "frames/000052.jpg",
+      "qpcTimestamp": 709563941607,
+      "elapsedQpc": 127243808,
+      "elapsedMilliseconds": 12724.3808
+    },
+    {
+      "sequence": 53,
+      "file": "frames/000053.jpg",
+      "qpcTimestamp": 709566424953,
+      "elapsedQpc": 129727154,
+      "elapsedMilliseconds": 12972.7154
+    },
+    {
+      "sequence": 54,
+      "file": "frames/000054.jpg",
+      "qpcTimestamp": 709568782364,
+      "elapsedQpc": 132084565,
+      "elapsedMilliseconds": 13208.4565
+    },
+    {
+      "sequence": 55,
+      "file": "frames/000055.jpg",
+      "qpcTimestamp": 709571273575,
+      "elapsedQpc": 134575776,
+      "elapsedMilliseconds": 13457.5776
+    },
+    {
+      "sequence": 56,
+      "file": "frames/000056.jpg",
+      "qpcTimestamp": 709573945578,
+      "elapsedQpc": 137247779,
+      "elapsedMilliseconds": 13724.7779
+    },
+    {
+      "sequence": 57,
+      "file": "frames/000057.jpg",
+      "qpcTimestamp": 709576468527,
+      "elapsedQpc": 139770728,
+      "elapsedMilliseconds": 13977.0728
+    },
+    {
+      "sequence": 58,
+      "file": "frames/000058.jpg",
+      "qpcTimestamp": 709578951117,
+      "elapsedQpc": 142253318,
+      "elapsedMilliseconds": 14225.3318
+    },
+    {
+      "sequence": 59,
+      "file": "frames/000059.jpg",
+      "qpcTimestamp": 709581285343,
+      "elapsedQpc": 144587544,
+      "elapsedMilliseconds": 14458.7544
+    },
+    {
+      "sequence": 60,
+      "file": "frames/000060.jpg",
+      "qpcTimestamp": 709583778308,
+      "elapsedQpc": 147080509,
+      "elapsedMilliseconds": 14708.0509
+    },
+    {
+      "sequence": 61,
+      "file": "frames/000061.jpg",
+      "qpcTimestamp": 709586303808,
+      "elapsedQpc": 149606009,
+      "elapsedMilliseconds": 14960.6009
+    },
+    {
+      "sequence": 62,
+      "file": "frames/000062.jpg",
+      "qpcTimestamp": 709588781422,
+      "elapsedQpc": 152083623,
+      "elapsedMilliseconds": 15208.3623
+    },
+    {
+      "sequence": 63,
+      "file": "frames/000063.jpg",
+      "qpcTimestamp": 709591277434,
+      "elapsedQpc": 154579635,
+      "elapsedMilliseconds": 15457.9635
+    },
+    {
+      "sequence": 64,
+      "file": "frames/000064.jpg",
+      "qpcTimestamp": 709593949099,
+      "elapsedQpc": 157251300,
+      "elapsedMilliseconds": 15725.13
+    },
+    {
+      "sequence": 65,
+      "file": "frames/000065.jpg",
+      "qpcTimestamp": 709596472769,
+      "elapsedQpc": 159774970,
+      "elapsedMilliseconds": 15977.497
+    },
+    {
+      "sequence": 66,
+      "file": "frames/000066.jpg",
+      "qpcTimestamp": 709598947749,
+      "elapsedQpc": 162249950,
+      "elapsedMilliseconds": 16224.995
+    },
+    {
+      "sequence": 67,
+      "file": "frames/000067.jpg",
+      "qpcTimestamp": 709601281823,
+      "elapsedQpc": 164584024,
+      "elapsedMilliseconds": 16458.4024
+    },
+    {
+      "sequence": 68,
+      "file": "frames/000068.jpg",
+      "qpcTimestamp": 709603944324,
+      "elapsedQpc": 167246525,
+      "elapsedMilliseconds": 16724.6525
+    },
+    {
+      "sequence": 69,
+      "file": "frames/000069.jpg",
+      "qpcTimestamp": 709606470578,
+      "elapsedQpc": 169772779,
+      "elapsedMilliseconds": 16977.2779
+    },
+    {
+      "sequence": 70,
+      "file": "frames/000070.jpg",
+      "qpcTimestamp": 709608944870,
+      "elapsedQpc": 172247071,
+      "elapsedMilliseconds": 17224.7071
+    },
+    {
+      "sequence": 71,
+      "file": "frames/000071.jpg",
+      "qpcTimestamp": 709611449856,
+      "elapsedQpc": 174752057,
+      "elapsedMilliseconds": 17475.2057
+    },
+    {
+      "sequence": 72,
+      "file": "frames/000072.jpg",
+      "qpcTimestamp": 709613943841,
+      "elapsedQpc": 177246042,
+      "elapsedMilliseconds": 17724.6042
+    },
+    {
+      "sequence": 73,
+      "file": "frames/000073.jpg",
+      "qpcTimestamp": 709616300260,
+      "elapsedQpc": 179602461,
+      "elapsedMilliseconds": 17960.2461
+    },
+    {
+      "sequence": 74,
+      "file": "frames/000074.jpg",
+      "qpcTimestamp": 709618779244,
+      "elapsedQpc": 182081445,
+      "elapsedMilliseconds": 18208.1445
+    },
+    {
+      "sequence": 75,
+      "file": "frames/000075.jpg",
+      "qpcTimestamp": 709621450712,
+      "elapsedQpc": 184752913,
+      "elapsedMilliseconds": 18475.2913
+    },
+    {
+      "sequence": 76,
+      "file": "frames/000076.jpg",
+      "qpcTimestamp": 709623941435,
+      "elapsedQpc": 187243636,
+      "elapsedMilliseconds": 18724.3636
+    },
+    {
+      "sequence": 77,
+      "file": "frames/000077.jpg",
+      "qpcTimestamp": 709626472007,
+      "elapsedQpc": 189774208,
+      "elapsedMilliseconds": 18977.4208
+    },
+    {
+      "sequence": 78,
+      "file": "frames/000078.jpg",
+      "qpcTimestamp": 709628955915,
+      "elapsedQpc": 192258116,
+      "elapsedMilliseconds": 19225.8116
+    },
+    {
+      "sequence": 79,
+      "file": "frames/000079.jpg",
+      "qpcTimestamp": 709631451976,
+      "elapsedQpc": 194754177,
+      "elapsedMilliseconds": 19475.4177
+    },
+    {
+      "sequence": 80,
+      "file": "frames/000080.jpg",
+      "qpcTimestamp": 709633947726,
+      "elapsedQpc": 197249927,
+      "elapsedMilliseconds": 19724.9927
+    },
+    {
+      "sequence": 81,
+      "file": "frames/000081.jpg",
+      "qpcTimestamp": 709636504085,
+      "elapsedQpc": 199806286,
+      "elapsedMilliseconds": 19980.6286
+    },
+    {
+      "sequence": 82,
+      "file": "frames/000082.jpg",
+      "qpcTimestamp": 709638948936,
+      "elapsedQpc": 202251137,
+      "elapsedMilliseconds": 20225.1137
+    },
+    {
+      "sequence": 83,
+      "file": "frames/000083.jpg",
+      "qpcTimestamp": 709641446414,
+      "elapsedQpc": 204748615,
+      "elapsedMilliseconds": 20474.8615
+    },
+    {
+      "sequence": 84,
+      "file": "frames/000084.jpg",
+      "qpcTimestamp": 709643948276,
+      "elapsedQpc": 207250477,
+      "elapsedMilliseconds": 20725.0477
+    },
+    {
+      "sequence": 85,
+      "file": "frames/000085.jpg",
+      "qpcTimestamp": 709646469436,
+      "elapsedQpc": 209771637,
+      "elapsedMilliseconds": 20977.1637
+    },
+    {
+      "sequence": 86,
+      "file": "frames/000086.jpg",
+      "qpcTimestamp": 709648786095,
+      "elapsedQpc": 212088296,
+      "elapsedMilliseconds": 21208.8296
+    },
+    {
+      "sequence": 87,
+      "file": "frames/000087.jpg",
+      "qpcTimestamp": 709651279632,
+      "elapsedQpc": 214581833,
+      "elapsedMilliseconds": 21458.1833
+    }
+  ]
+}

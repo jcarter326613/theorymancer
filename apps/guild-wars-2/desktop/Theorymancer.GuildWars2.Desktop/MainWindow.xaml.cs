@@ -26,6 +26,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
     private CombatLogCaptureSession? _captureSession;
+    private SkillBarFixtureCaptureSession? _fixtureCaptureSession;
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
     private BuildSkillCandidates? _loadedBuildCandidates;
@@ -313,6 +314,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
+        if (_fixtureCaptureSession is not null)
+        {
+            ShowSetupError("Stop the cooldown fixture capture before starting normal recording.");
+            return;
+        }
+
         if (_selectedWindow is null ||
             _settings.CombatLogCrop is null ||
             _settings.SkillBarCrop is null ||
@@ -365,9 +372,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await StopCaptureAsync();
     }
 
+    private void StartFixtureCapture_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fixtureCaptureSession is not null)
+        {
+            return;
+        }
+
+        if (_captureSession is not null)
+        {
+            ShowSetupError("Stop normal recording before capturing a cooldown fixture.");
+            return;
+        }
+
+        if (_selectedWindow is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasSkillSlots: true })
+        {
+            ShowSetupError("Select the GW2 window and calibrate the skill-bar crop and layout before capturing a cooldown fixture.");
+            return;
+        }
+
+        if (!_selectedWindow.TryGetClientBounds(out _))
+        {
+            ShowSetupError("Guild Wars 2 is no longer available. Select its window again.");
+            return;
+        }
+
+        var session = SkillBarFixtureCaptureSession.Start(
+            _selectedWindow,
+            _settings.SkillBarCrop,
+            _settings.SkillBarLayout);
+        _fixtureCaptureSession = session;
+        session.StatusChanged += FixtureCaptureSession_StatusChanged;
+        session.Completed += result => FixtureCaptureSession_Completed(session, result);
+        StartFixtureCaptureButton.IsEnabled = false;
+        StopFixtureCaptureButton.IsEnabled = true;
+        RunDiagnosticOcrButton.IsEnabled = false;
+        StartButton.IsEnabled = false;
+        FixtureCaptureStatusText.Text = $"Preparing frames in {session.SessionDirectory}";
+        AddActivity("Cooldown fixture capture requested. Switch to Guild Wars 2 and use the first skill after the delay.", "fixture_capture_started");
+    }
+
+    private async void StopFixtureCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await StopFixtureCaptureAsync();
+    }
+
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         _authentication.StateChanged -= Authentication_StateChanged;
+        await StopFixtureCaptureAsync();
         await StopCaptureAsync();
     }
 
@@ -418,6 +473,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private async Task StopFixtureCaptureAsync()
+    {
+        if (_fixtureCaptureSession is not { } fixtureCaptureSession)
+        {
+            return;
+        }
+
+        StopFixtureCaptureButton.IsEnabled = false;
+        FixtureCaptureStatusText.Text = "Stopping cooldown fixture capture...";
+        await fixtureCaptureSession.DisposeAsync();
+    }
+
     private void CombatLogCaptureSession_StatusChanged(string message)
     {
         Dispatcher.BeginInvoke(() =>
@@ -454,6 +521,53 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ProcessedDiagnosticPreview.Source = diagnostics.ProcessedPreviewFrame is { } processed
                 ? ToBitmapSource(processed.Frame)
                 : null;
+        });
+    }
+
+    private void FixtureCaptureSession_StatusChanged(string message)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_fixtureCaptureSession is null)
+            {
+                return;
+            }
+
+            FixtureCaptureStatusText.Text = message;
+            AddActivity(message, "fixture_capture_status");
+        });
+    }
+
+    private void FixtureCaptureSession_Completed(
+        SkillBarFixtureCaptureSession session,
+        SkillBarFixtureCaptureResult result)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!ReferenceEquals(_fixtureCaptureSession, session))
+            {
+                return;
+            }
+
+            _fixtureCaptureSession = null;
+            StartFixtureCaptureButton.IsEnabled = _diagnosticsEnabled;
+            StopFixtureCaptureButton.IsEnabled = false;
+            RunDiagnosticOcrButton.IsEnabled = _diagnosticsEnabled;
+            StartButton.IsEnabled = _captureSession is null;
+            var reason = result.Error is not null
+                ? $"failed: {result.Error}"
+                : result.ReachedMaximumDuration
+                    ? "reached the 60-second limit"
+                    : result.WasCancelled
+                        ? "stopped"
+                        : "completed";
+            FixtureCaptureStatusText.Text =
+                $"{reason}. {result.FramesCaptured} frame(s): {result.SessionDirectory}";
+            AddActivity(
+                $"Cooldown fixture capture {reason}. {result.FramesCaptured} frame(s) saved to {result.SessionDirectory}.",
+                "fixture_capture_completed",
+                result);
+            _ = session.DisposeAsync();
         });
     }
 
@@ -500,7 +614,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void DiagnosticsCheckBox_Changed(object sender, RoutedEventArgs e)
+    private async void DiagnosticsCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         _diagnosticsEnabled = DiagnosticsCheckBox.IsChecked == true;
         DiagnosticsPanel.Visibility = _diagnosticsEnabled ? Visibility.Visible : Visibility.Collapsed;
@@ -512,9 +626,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!_diagnosticsEnabled)
         {
+            await StopFixtureCaptureAsync();
             DiagnosticsSummaryText.Text = string.Empty;
             OriginalDiagnosticPreview.Source = null;
             ProcessedDiagnosticPreview.Source = null;
+            FixtureCaptureStatusText.Text = string.Empty;
         }
 
         AddActivity(

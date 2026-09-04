@@ -108,5 +108,17 @@ visible activity entries and the correlated matcher result for each processed OC
 frame.
 Diagnostic previews are not saved.
 
+When diagnostics is enabled, **Start fixture capture** records the calibrated
+full skill-bar crop for cooldown-analysis fixtures. It waits three seconds so
+the player can switch to Guild Wars 2, samples at four frames per second, and
+stops manually or after 60 seconds. It requires a selected game window plus a
+calibrated skill-bar crop and layout, but does not start normal combat-log
+recording or OCR. Each run writes JPEG frames and `timeline.json` under
+`debug-skill-bar-cooldown-fixtures/<capture-start-timestamp>/` relative to the
+working directory. The timeline records the QPC frequency, timestamp and
+elapsed time for every frame, and the pixel bounds of every skill slot. Select
+representative frames from a run for permanent test fixtures; keep the
+timeline when fitting cooldown progress across multiple simultaneous skills.
+
 Game analysis workloads remain independent of the public website and API and
 may use Python or another runtime when their requirements justify it.

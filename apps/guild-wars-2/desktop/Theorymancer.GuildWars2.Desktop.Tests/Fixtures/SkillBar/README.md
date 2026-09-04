@@ -21,3 +21,9 @@ Cooldown-state fixtures may instead set `referenceFixture` to a complete
 skill-bar fixture and include only `screenshot`, plus each slot's pixel bounds
 and expected `state` in `expectations.json`. Their tests use those explicit
 bounds directly; they do not run skill-bar calibration or layout detection.
+
+The diagnostics fixture recorder produces a timestamped JPEG sequence and
+`timeline.json`. Copy selected JPEG frames into a state-fixture directory, then
+copy each frame's pixel slot bounds from the timeline into that fixture's
+`expectations.json`. Keep the original timeline with multi-frame cooldown
+fixtures so tests can fit each overlapping skill's wipe progress independently.

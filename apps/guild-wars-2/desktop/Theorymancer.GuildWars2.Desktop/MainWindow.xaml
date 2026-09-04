@@ -63,37 +63,55 @@
     </Grid>
 
     <Grid Grid.Row="4">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="8" />
-        <ColumnDefinition Width="280" />
-      </Grid.ColumnDefinitions>
-      <ListBox x:Name="ActivityList" FontFamily="Consolas" FontSize="12" ItemsSource="{Binding ActivityLog}" />
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
-      <Border x:Name="DiagnosticsPanel" Grid.Column="2" Padding="12" BorderBrush="Gainsboro" BorderThickness="1" Visibility="Collapsed">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel>
-            <TextBlock FontWeight="SemiBold" Text="Combat-log capture diagnostics" />
-            <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
-            <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
-            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Original crop" />
-            <Border BorderBrush="Gainsboro" BorderThickness="1">
-              <Image x:Name="OriginalDiagnosticPreview" Stretch="Uniform" />
-            </Border>
-            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Combat-log OCR input" />
-            <Border BorderBrush="Gainsboro" BorderThickness="1">
-              <Image x:Name="ProcessedDiagnosticPreview" Stretch="Uniform" />
-            </Border>
-            <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Images remain in memory only while diagnostics are enabled." />
-          </StackPanel>
-        </ScrollViewer>
-      </Border>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="8" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <DockPanel Grid.Row="0">
+        <CheckBox x:Name="DiagnosticsCheckBox" DockPanel.Dock="Right" VerticalAlignment="Center" Checked="DiagnosticsCheckBox_Changed" Unchecked="DiagnosticsCheckBox_Changed" Content="Enable diagnostics" />
+        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Activity" />
+      </DockPanel>
+      <Grid Grid.Row="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="8" />
+          <ColumnDefinition Width="280" />
+        </Grid.ColumnDefinitions>
+        <ListBox x:Name="ActivityList" FontFamily="Consolas" FontSize="12" ItemsSource="{Binding ActivityLog}" />
+        <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
+        <Border x:Name="DiagnosticsPanel" Grid.Column="2" Padding="12" BorderBrush="Gainsboro" BorderThickness="1" Visibility="Collapsed">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <TextBlock FontWeight="SemiBold" Text="Diagnostics" />
+              <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+              <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
+              <Separator Margin="0,16,0,12" />
+              <TextBlock FontWeight="SemiBold" Text="Cooldown fixture capture" />
+              <TextBlock Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="After a 3-second delay, records the full skill bar as JPEG frames at 4 FPS. Stop after every tracked skill is available." />
+              <WrapPanel Margin="0,8,0,0">
+                <Button x:Name="StartFixtureCaptureButton" Padding="10,5" Click="StartFixtureCapture_Click" Content="Start fixture capture" />
+                <Button x:Name="StopFixtureCaptureButton" Margin="8,0,0,0" Padding="10,5" Click="StopFixtureCapture_Click" Content="Stop" IsEnabled="False" />
+              </WrapPanel>
+              <TextBlock x:Name="FixtureCaptureStatusText" Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" />
+              <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Original crop" />
+              <Border BorderBrush="Gainsboro" BorderThickness="1">
+                <Image x:Name="OriginalDiagnosticPreview" Stretch="Uniform" />
+              </Border>
+              <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Combat-log OCR input" />
+              <Border BorderBrush="Gainsboro" BorderThickness="1">
+                <Image x:Name="ProcessedDiagnosticPreview" Stretch="Uniform" />
+              </Border>
+              <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Images remain in memory only while diagnostics are enabled." />
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+      </Grid>
     </Grid>
 
     <DockPanel Grid.Row="6">
       <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding CaptureStatus}" />
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-        <CheckBox x:Name="DiagnosticsCheckBox" Margin="0,0,12,0" VerticalAlignment="Center" Checked="DiagnosticsCheckBox_Changed" Unchecked="DiagnosticsCheckBox_Changed" Content="Enable diagnostics" />
         <Button x:Name="StartButton" Padding="14,7" Click="Start_Click" Content="Start capture" />
         <Button x:Name="StopButton" Margin="8,0,0,0" Padding="14,7" Click="Stop_Click" Content="Stop capture" IsEnabled="False" />
       </StackPanel>
