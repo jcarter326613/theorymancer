@@ -1,0 +1,121 @@
+using System.Drawing;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Theorymancer.GuildWars2.Desktop.Capture;
+using Theorymancer.GuildWars2.Desktop.SkillBar;
+
+namespace Theorymancer.GuildWars2.Desktop.Tests;
+
+public sealed class SkillCooldownDetectorTests
+{
+    [Theory]
+    [InlineData("reaper-greatsword-skills-used-1")]
+    [InlineData("reaper-greatsword-skills-used-2")]
+    public void Detect_ClassifiesEverySkillSlotAndMeasuresCooldownWipes(string fixtureName)
+    {
+        var fixture = LoadCooldownFixture(fixtureName);
+        Assert.Equal(Enum.GetValues<SkillBarComponentKind>(), fixture.Slots.Select(slot => slot.ComponentKind));
+        var frame = LoadFrame(Path.Combine(FixturesDirectory, fixtureName, fixture.Screenshot));
+        var detection = new SkillCooldownDetector().Detect(
+            frame,
+            CreateLayout(frame, fixture.Slots),
+            CreateReferences(fixture));
+
+        Assert.Equal(frame.QpcTimestamp, detection.QpcTimestamp);
+        Assert.Equal(fixture.Slots.Count, detection.Observations.Count);
+        foreach (var expected in fixture.Slots)
+        {
+            var observation = Assert.Single(detection.Observations, observation => observation.Kind == expected.ComponentKind);
+            Assert.Equal(expected.State, observation.State);
+            Assert.InRange(observation.Confidence, 0, 1);
+            if (expected.State == SkillCooldownState.OnCooldown)
+            {
+                Assert.NotNull(observation.VisibleWipeFraction);
+                Assert.InRange(observation.VisibleWipeFraction!.Value, 0, 1);
+            }
+            else
+            {
+                Assert.Null(observation.VisibleWipeFraction);
+            }
+        }
+    }
+
+    private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "SkillBar");
+
+    private static SkillBarLayout CreateLayout(CapturedFrame frame, IReadOnlyList<CooldownSlot> slots) => new(
+        slots.Select(slot => SkillBarComponent.FromPixelBounds(
+                slot.ComponentKind,
+                new ScreenBounds(slot.X, slot.Y, slot.Width, slot.Height),
+                frame.Width,
+                frame.Height,
+                1))
+            .ToList());
+
+    private static IReadOnlyList<SkillCooldownReference> CreateReferences(CooldownFixture fixture)
+    {
+        var reference = JsonSerializer.Deserialize<ReferenceFixture>(
+            File.ReadAllText(Path.Combine(FixturesDirectory, fixture.ReferenceFixture, "expectations.json")),
+            JsonOptions)
+            ?? throw new InvalidOperationException($"Reference fixture is invalid: {fixture.ReferenceFixture}");
+        return reference.Slots.Select(slot => new SkillCooldownReference(
+            slot.ComponentKind,
+            slot.SkillId,
+            Path.Combine(FixturesDirectory, fixture.ReferenceFixture, "icons", slot.IconFile)))
+            .ToList();
+    }
+
+    private static CooldownFixture LoadCooldownFixture(string fixtureName) =>
+        JsonSerializer.Deserialize<CooldownFixture>(
+            File.ReadAllText(Path.Combine(FixturesDirectory, fixtureName, "expectations.json")),
+            JsonOptions)
+        ?? throw new InvalidOperationException($"Cooldown fixture is invalid: {fixtureName}");
+
+    private static CapturedFrame LoadFrame(string path)
+    {
+        using var bitmap = new Bitmap(path);
+        var stride = bitmap.Width * 4;
+        var pixels = new byte[stride * bitmap.Height];
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var color = bitmap.GetPixel(x, y);
+                var index = y * stride + x * 4;
+                pixels[index] = color.B;
+                pixels[index + 1] = color.G;
+                pixels[index + 2] = color.R;
+                pixels[index + 3] = color.A;
+            }
+        }
+
+        return new CapturedFrame(123, bitmap.Width, bitmap.Height, stride, pixels);
+    }
+
+    private static JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    private sealed record CooldownFixture(
+        string Screenshot,
+        string ReferenceFixture,
+        IReadOnlyList<CooldownSlot> Slots);
+
+    private sealed record CooldownSlot(
+        string Kind,
+        int X,
+        int Y,
+        int Width,
+        int Height,
+        SkillCooldownState State)
+    {
+        public SkillBarComponentKind ComponentKind => Enum.Parse<SkillBarComponentKind>(Kind);
+    }
+
+    private sealed record ReferenceFixture(IReadOnlyList<ReferenceSlot> Slots);
+
+    private sealed record ReferenceSlot(string Kind, int SkillId, string IconFile)
+    {
+        public SkillBarComponentKind ComponentKind => Enum.Parse<SkillBarComponentKind>(Kind);
+    }
+}

@@ -16,3 +16,8 @@ profession response needed to derive the same candidates.
 New fixtures must include a screenshot, normalized slot expectations, a
 minimal build input, and only the canonical reference PNGs needed by that
 scenario. Do not add the general icon corpus to this directory.
+
+Cooldown-state fixtures may instead set `referenceFixture` to a complete
+skill-bar fixture and include only `screenshot`, plus each slot's pixel bounds
+and expected `state` in `expectations.json`. Their tests use those explicit
+bounds directly; they do not run skill-bar calibration or layout detection.
