@@ -19,6 +19,7 @@ public sealed class CooldownTimeFixtureTests
         var detector = new SkillCooldownDetector();
         var estimator = new SkillCooldownTimeEstimator(timeline.QpcFrequency);
         var latestEstimates = new Dictionary<SkillBarComponentKind, SkillCooldownTimeEstimate>();
+        var observationHistory = new List<string>();
         var selectedSequences = fixture.Cooldowns
             .SelectMany(cooldown => cooldown.SampleSequences)
             .Distinct()
@@ -33,6 +34,8 @@ public sealed class CooldownTimeFixtureTests
             foreach (var cooldown in fixture.Cooldowns.Where(cooldown => cooldown.SampleSequences.Contains(sequence)))
             {
                 var observation = Assert.Single(detection.Observations, candidate => candidate.Kind == cooldown.ComponentKind);
+                observationHistory.Add(
+                    $"{sequence}:{cooldown.ComponentKind}:{observation.State}:{observation.VisibleWipeFraction?.ToString("F3") ?? "none"}");
                 var isCompletion = sequence == cooldown.FirstAvailableSequence;
                 if (sequence == cooldown.FirstCooldownSequence)
                 {
@@ -46,7 +49,10 @@ public sealed class CooldownTimeFixtureTests
                 }
                 else
                 {
-                    Assert.NotNull(observation.VisibleWipeFraction);
+                    Assert.True(
+                        observation.VisibleWipeFraction is not null,
+                        $"Expected a wipe measurement for {cooldown.ComponentKind} at frame {sequence}, " +
+                        $"but detected {observation.State}.");
                 }
 
                 var estimate = estimator.Observe(new SkillCooldownWipeSample(
@@ -73,15 +79,21 @@ public sealed class CooldownTimeFixtureTests
 
                 if (cooldown.TryGetCheckpoint(sequence, out var checkpoint))
                 {
-                    var tracking = Assert.IsType<SkillCooldownTimeEstimate>(estimate);
-                    Assert.Equal(SkillCooldownEstimateState.Tracking, tracking.State);
+                    Assert.True(
+                        estimate is { State: SkillCooldownEstimateState.Tracking },
+                        $"Expected tracking estimate for {cooldown.ComponentKind} at frame {sequence}; " +
+                        $"detected {observation.State} with visible wipe {observation.VisibleWipeFraction?.ToString("F3") ?? "none"}. " +
+                        $"Observed samples: {string.Join(", ", observationHistory)}.");
+                    var tracking = estimate!;
                     var completion = framesBySequence[cooldown.FirstAvailableSequence];
                     var expectedRemainingMilliseconds =
                         (completion.QpcTimestamp - frameInfo.QpcTimestamp) * 1000.0 / timeline.QpcFrequency;
-                    Assert.InRange(
-                        Math.Abs(tracking.Remaining.TotalMilliseconds - expectedRemainingMilliseconds),
-                        0,
-                        checkpoint.MaximumErrorMilliseconds);
+                    var errorMilliseconds = Math.Abs(tracking.Remaining.TotalMilliseconds - expectedRemainingMilliseconds);
+                    Assert.True(
+                        errorMilliseconds <= checkpoint.MaximumErrorMilliseconds,
+                        $"Expected remaining time within {checkpoint.MaximumErrorMilliseconds}ms for " +
+                        $"{cooldown.ComponentKind} at frame {sequence}, but error was {errorMilliseconds:F0}ms. " +
+                        $"Observed samples: {string.Join(", ", observationHistory)}.");
                     latestEstimates[cooldown.ComponentKind] = tracking;
                 }
             }

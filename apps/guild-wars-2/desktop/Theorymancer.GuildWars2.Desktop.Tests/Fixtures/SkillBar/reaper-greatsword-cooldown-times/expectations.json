@@ -3,9 +3,9 @@
   "cooldowns": [
     {
       "kind": "WeaponSkill2",
-      "firstCooldownSequence": 12,
+      "firstCooldownSequence": 14,
       "firstAvailableSequence": 46,
-      "sampleSequences": [12, 20, 26, 30, 38, 42, 45, 46],
+      "sampleSequences": [14, 20, 26, 30, 38, 42, 45, 46],
       "estimateCheckpoints": [
         { "sequence": 26, "maximumErrorMilliseconds": 1200 },
         { "sequence": 38, "maximumErrorMilliseconds": 750 }
@@ -14,11 +14,11 @@
     {
       "kind": "WeaponSkill3",
       "firstCooldownSequence": 30,
-      "firstAvailableSequence": 71,
-      "sampleSequences": [30, 38, 42, 50, 60, 70, 71],
+      "firstAvailableSequence": 70,
+      "sampleSequences": [30, 38, 42, 50, 60, 70],
       "estimateCheckpoints": [
-        { "sequence": 42, "maximumErrorMilliseconds": 1200 },
-        { "sequence": 60, "maximumErrorMilliseconds": 750 }
+        { "sequence": 42, "maximumErrorMilliseconds": 1500 },
+        { "sequence": 60, "maximumErrorMilliseconds": 800 }
       ]
     }
   ]
