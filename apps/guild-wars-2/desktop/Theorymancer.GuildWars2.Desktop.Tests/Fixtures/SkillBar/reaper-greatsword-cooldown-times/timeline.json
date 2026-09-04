@@ -7,49 +7,49 @@
   "slots": [
     {
       "kind": "WeaponSkill1",
-      "x": 58,
+      "x": 59,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "WeaponSkill2",
-      "x": 144,
+      "x": 143,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "WeaponSkill3",
-      "x": 224,
+      "x": 225,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "WeaponSkill4",
-      "x": 310,
+      "x": 308,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "WeaponSkill5",
-      "x": 387,
+      "x": 390,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "HealSkill",
-      "x": 618,
+      "x": 622,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "UtilitySkill1",
-      "x": 702,
+      "x": 704,
       "y": 102,
       "width": 80,
       "height": 80
@@ -63,14 +63,14 @@
     },
     {
       "kind": "UtilitySkill3",
-      "x": 870,
+      "x": 869,
       "y": 102,
       "width": 80,
       "height": 80
     },
     {
       "kind": "EliteSkill",
-      "x": 948,
+      "x": 951,
       "y": 102,
       "width": 80,
       "height": 80
