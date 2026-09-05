@@ -20,6 +20,7 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
     private volatile bool _diagnosticsEnabled;
+    private volatile bool _diagnosticRecordingEnabled;
     private long _framesCaptured;
     private long _ocrFramesQueued;
     private long _lastDiagnosticQpc;
@@ -67,11 +68,6 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
             var capture = new VisibleScreenRegionCapture(gameWindow, settings.CombatLogCrop);
             var debugFrameWriter = new CombatLogOcrFrameDebugWriter(Directory.GetCurrentDirectory(), DateTimeOffset.Now);
             var debugActivityWriter = new CombatLogActivityLogDebugWriter(debugFrameWriter.SessionDirectory);
-            if (diagnosticsEnabled)
-            {
-                debugFrameWriter.EnsureSessionDirectory();
-            }
-
             CombatLogCaptureSession? session = null;
             var ocrWorker = new OcrWorker(
                 WindowsCombatLogOcrEngine.CreateEnglish(),
@@ -150,6 +146,7 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
             });
             await _writer.DisposeAsync();
             _debugFrameWriter.Dispose();
+            await _debugActivityWriter.DisposeAsync();
             _cancellationTokenSource.Dispose();
         }
     }
@@ -170,6 +167,7 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
         _diagnosticsEnabled = enabled;
         if (!enabled)
         {
+            _diagnosticRecordingEnabled = false;
             _latestPreprocessedFrame = null;
             _latestFrameMatch = null;
             DiagnosticsUpdated?.Invoke(new CombatLogCaptureDiagnostics(
@@ -179,6 +177,15 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
                 null,
                 null,
                 null));
+        }
+    }
+
+    public void SetDiagnosticRecordingEnabled(bool enabled)
+    {
+        _diagnosticRecordingEnabled = enabled && _diagnosticsEnabled;
+        if (_diagnosticRecordingEnabled)
+        {
+            _debugFrameWriter.EnsureSessionDirectory();
         }
     }
 
@@ -249,14 +256,14 @@ public sealed class CombatLogCaptureSession : IAsyncDisposable, IDisposable
     }
 
     private async Task<long?> WriteDebugOcrFrameAsync(IReadOnlyList<RecognizedCombatLogLine> lines) =>
-        _diagnosticsEnabled ? await _debugFrameWriter.WriteFrameAsync(lines) : null;
+        _diagnosticRecordingEnabled ? await _debugFrameWriter.WriteFrameAsync(lines) : null;
 
     private void WriteDebugOcrFrameMatch(
         long? rawFrameSequence,
         IReadOnlyList<RecognizedCombatLogLine> lines,
         FrameMatchResult? match)
     {
-        if (_diagnosticsEnabled)
+        if (_diagnosticRecordingEnabled)
         {
             _debugActivityWriter.WriteFrameMatch(rawFrameSequence, lines, match);
         }

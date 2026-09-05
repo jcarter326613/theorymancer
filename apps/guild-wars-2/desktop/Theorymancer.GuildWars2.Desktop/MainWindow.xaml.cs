@@ -30,6 +30,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private SkillCooldownMonitor? _cooldownMonitor;
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
+    private bool _diagnosticRecordingEnabled;
     private BuildSkillCandidates? _loadedBuildCandidates;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
@@ -357,13 +358,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _captureSession.StatusChanged += CombatLogCaptureSession_StatusChanged;
             _captureSession.LineRecognized += CombatLogCaptureSession_LineRecognized;
             _captureSession.DiagnosticsUpdated += CombatLogCaptureSession_DiagnosticsUpdated;
-            if (_diagnosticsEnabled)
-            {
-                _activityLogDebugWriter = _captureSession.DebugActivityWriter;
-            }
-
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
+            UpdateDiagnosticRecordingControls();
             CaptureStatus = "Recording";
             AddActivity(
                 "Recording started. Press Stop capture before moving or minimizing Guild Wars 2.",
@@ -374,6 +371,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _captureSession?.Dispose();
             _captureSession = null;
+            UpdateDiagnosticRecordingControls();
             ShowSetupError(exception.Message);
         }
     }
@@ -467,8 +465,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        SetDiagnosticRecordingEnabled(false);
         var captureSession = _captureSession;
         _captureSession = null;
+        UpdateDiagnosticRecordingControls();
         await StopCooldownMonitoringAsync();
         await captureSession.DisposeAsync();
         StartButton.IsEnabled = true;
@@ -478,11 +478,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             $"Recording stopped. {FormatStatistics(captureSession.Statistics)}",
             "capture_stopped",
             captureSession.Statistics);
-        if (_activityLogDebugWriter is { } activityLogDebugWriter)
-        {
-            await activityLogDebugWriter.DisposeAsync();
-            _activityLogDebugWriter = null;
-        }
+        _activityLogDebugWriter = null;
     }
 
     private async Task StopFixtureCaptureAsync()
@@ -504,6 +500,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CaptureStatus = message;
             AddActivity(message, "capture_status");
         });
+    }
+
+    private void ToggleDiagnosticRecording_Click(object sender, RoutedEventArgs e)
+    {
+        if (_captureSession is null || !_diagnosticsEnabled)
+        {
+            return;
+        }
+
+        if (_diagnosticRecordingEnabled)
+        {
+            AddActivity("Diagnostic recording stopped.", "diagnostic_recording_stopped");
+            SetDiagnosticRecordingEnabled(false);
+            return;
+        }
+
+        SetDiagnosticRecordingEnabled(true);
+        AddActivity("Diagnostic recording started.", "diagnostic_recording_started");
+    }
+
+    private void SetDiagnosticRecordingEnabled(bool enabled)
+    {
+        _diagnosticRecordingEnabled = enabled && _diagnosticsEnabled && _captureSession is not null;
+        _captureSession?.SetDiagnosticRecordingEnabled(_diagnosticRecordingEnabled);
+        _activityLogDebugWriter = _diagnosticRecordingEnabled && _captureSession is not null
+            ? _captureSession.DebugActivityWriter
+            : null;
+        UpdateDiagnosticRecordingControls();
+    }
+
+    private void UpdateDiagnosticRecordingControls()
+    {
+        var canRecord = _diagnosticsEnabled && _captureSession is not null;
+        ToggleDiagnosticRecordingButton.IsEnabled = canRecord;
+        ToggleDiagnosticRecordingButton.Content = _diagnosticRecordingEnabled
+            ? "Stop diagnostic recording"
+            : "Start diagnostic recording";
+        DiagnosticRecordingStatusText.Text = _diagnosticRecordingEnabled
+            ? "Recording diagnostic OCR frames and activity events to disk."
+            : "Diagnostic files are not being recorded.";
     }
 
     private async Task StartCooldownMonitoringAsync()
@@ -720,12 +756,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _captureSession?.SetDiagnosticsEnabled(_diagnosticsEnabled);
         if (_diagnosticsEnabled && _captureSession is not null)
         {
-            _activityLogDebugWriter = _captureSession.DebugActivityWriter;
             await StartCooldownMonitoringAsync();
         }
 
         if (!_diagnosticsEnabled)
         {
+            SetDiagnosticRecordingEnabled(false);
             await StopCooldownMonitoringAsync();
             await StopFixtureCaptureAsync();
             DiagnosticsSummaryText.Text = string.Empty;
@@ -735,6 +771,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CooldownRows.Clear();
             CooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
         }
+
+        UpdateDiagnosticRecordingControls();
 
         AddActivity(
             _diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.",

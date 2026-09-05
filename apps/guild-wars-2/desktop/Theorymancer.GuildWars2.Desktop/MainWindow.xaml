@@ -121,6 +121,8 @@
               </Border>
               <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
               <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
+              <Button x:Name="ToggleDiagnosticRecordingButton" Margin="0,8,0,0" Padding="10,5" HorizontalAlignment="Left" Click="ToggleDiagnosticRecording_Click" Content="Start diagnostic recording" IsEnabled="False" />
+              <TextBlock x:Name="DiagnosticRecordingStatusText" Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Diagnostic files are not being recorded." />
               <Separator Margin="0,16,0,12" />
               <TextBlock FontWeight="SemiBold" Text="Cooldown fixture capture" />
               <TextBlock Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="After a 3-second delay, records the full skill bar as JPEG frames at 4 FPS. Stop after every tracked skill is available." />
@@ -137,7 +139,7 @@
               <Border BorderBrush="Gainsboro" BorderThickness="1">
                 <Image x:Name="ProcessedDiagnosticPreview" Stretch="Uniform" />
               </Border>
-              <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Images remain in memory only while diagnostics are enabled." />
+              <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Preview images remain in memory only. Diagnostic files are written only while diagnostic recording is active." />
             </StackPanel>
           </ScrollViewer>
         </Border>

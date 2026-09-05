@@ -14,6 +14,8 @@ public sealed class CombatLogActivityLogDebugWriterTests
         {
             await using (var writer = new CombatLogActivityLogDebugWriter(sessionDirectory))
             {
+                Assert.False(Directory.Exists(sessionDirectory));
+
                 writer.WriteActivity(
                     new DateTimeOffset(2026, 8, 27, 14, 0, 0, TimeSpan.Zero),
                     "14:00:00  Recognized",
