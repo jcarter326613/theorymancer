@@ -138,8 +138,8 @@ public sealed class CooldownTimeFixtureTests
 
     private static string FixtureDirectory => Path.Combine(
         AppContext.BaseDirectory,
-        "Fixtures",
         "SkillBar",
+        "Fixtures",
         "reaper-greatsword-cooldown-times");
 
     private static TimelineFixture LoadTimeline() =>
@@ -170,8 +170,8 @@ public sealed class CooldownTimeFixtureTests
         var reference = JsonSerializer.Deserialize<ReferenceFixture>(
             File.ReadAllText(Path.Combine(
                 AppContext.BaseDirectory,
-                "Fixtures",
                 "SkillBar",
+                "Fixtures",
                 referenceFixture,
                 "expectations.json")),
             JsonOptions)
@@ -181,8 +181,8 @@ public sealed class CooldownTimeFixtureTests
             var layoutSlot = timeline.Slots.Single(candidate => candidate.ComponentKind == slot.ComponentKind);
             var iconPath = Path.Combine(
                 AppContext.BaseDirectory,
-                "Fixtures",
                 "SkillBar",
+                "Fixtures",
                 referenceFixture,
                 "icons",
                 slot.IconFile);

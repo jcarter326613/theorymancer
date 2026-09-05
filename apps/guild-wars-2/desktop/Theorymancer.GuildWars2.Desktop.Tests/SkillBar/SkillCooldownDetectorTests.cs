@@ -56,7 +56,7 @@ public sealed class SkillCooldownDetectorTests
                 $"{observation.Kind}={observation.VisibleWipeFraction:F3}")));
     }
 
-    private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "SkillBar");
+    private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "SkillBar", "Fixtures");
 
     private static SkillBarLayout CreateLayout(CapturedFrame frame, IReadOnlyList<CooldownSlot> slots) => new(
         slots.Select(slot => SkillBarComponent.FromPixelBounds(

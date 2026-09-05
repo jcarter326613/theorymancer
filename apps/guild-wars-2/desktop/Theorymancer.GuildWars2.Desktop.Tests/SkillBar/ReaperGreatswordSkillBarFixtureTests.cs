@@ -154,8 +154,8 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
         }
     }
 
-    private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures");
-    private static string ScenarioDirectory => Path.Combine(FixturesDirectory, "SkillBar", "reaper-greatsword");
+    private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "SkillBar", "Fixtures");
+    private static string ScenarioDirectory => Path.Combine(FixturesDirectory, "reaper-greatsword");
 
     private static SkillBarFixture LoadExpectations()
     {
