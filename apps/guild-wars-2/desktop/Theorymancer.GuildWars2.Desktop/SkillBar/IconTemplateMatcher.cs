@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
 using Theorymancer.GuildWars2.Desktop.Capture;
@@ -11,6 +12,7 @@ public static class IconTemplateMatcher
     private const int SampleSize = 12;
     private const int ChannelCount = 3;
     private const double InteriorInset = 0.08;
+    private static readonly ConcurrentDictionary<string, ReferenceTemplate> Templates = new();
 
     public static IconTemplateMatch? FindBestMatch(
         CapturedFrame frame,
@@ -348,7 +350,10 @@ public static class IconTemplateMatcher
         return Math.Clamp(1 - squaredError / 4, 0, 1);
     }
 
-    private static ReferenceTemplate LoadTemplate(string path)
+    private static ReferenceTemplate LoadTemplate(string path) =>
+        Templates.GetOrAdd(path, LoadTemplateCore);
+
+    private static ReferenceTemplate LoadTemplateCore(string path)
     {
         using var bitmap = new Bitmap(path);
         var bounds = TrimBlackBorder(bitmap);

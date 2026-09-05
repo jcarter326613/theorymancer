@@ -27,6 +27,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private SelectedGameWindow? _selectedWindow;
     private CombatLogCaptureSession? _captureSession;
     private SkillBarFixtureCaptureSession? _fixtureCaptureSession;
+    private SkillCooldownMonitor? _cooldownMonitor;
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
     private BuildSkillCandidates? _loadedBuildCandidates;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _captureStatus = "Not recording";
     private string _authenticationStatus = "Signed out";
     private string _arenaNetStatus = "Connect an ArenaNet API key to select a character and load its active build.";
+    private string _cooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
 
     public MainWindow(
         DesktopAuthenticationService authentication,
@@ -60,6 +62,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public ObservableCollection<string> ActivityLog { get; } = [];
 
+    public ObservableCollection<SkillCooldownDiagnosticsRow> CooldownRows { get; } = [];
+
     public ObservableCollection<string> ArenaNetCharacters { get; } = [];
 
     public string SetupStatus
@@ -84,6 +88,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _arenaNetStatus;
         private set => SetField(ref _arenaNetStatus, value);
+    }
+
+    public string CooldownMonitoringStatus
+    {
+        get => _cooldownMonitoringStatus;
+        private set => SetField(ref _cooldownMonitoringStatus, value);
     }
 
     private async void SignIn_Click(object sender, RoutedEventArgs e)
@@ -358,6 +368,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddActivity(
                 "Recording started. Press Stop capture before moving or minimizing Guild Wars 2.",
                 "capture_started");
+            await StartCooldownMonitoringAsync();
         }
         catch (Exception exception)
         {
@@ -458,6 +469,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var captureSession = _captureSession;
         _captureSession = null;
+        await StopCooldownMonitoringAsync();
         await captureSession.DisposeAsync();
         StartButton.IsEnabled = true;
         StopButton.IsEnabled = false;
@@ -492,6 +504,93 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CaptureStatus = message;
             AddActivity(message, "capture_status");
         });
+    }
+
+    private async Task StartCooldownMonitoringAsync()
+    {
+        if (!_diagnosticsEnabled || _captureSession is null || _cooldownMonitor is not null)
+        {
+            return;
+        }
+
+        if (_selectedWindow is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasSkillSlots: true } ||
+            _loadedBuildCandidates is null)
+        {
+            CooldownMonitoringStatus = "Load the active build to identify and measure skill cooldowns.";
+            return;
+        }
+
+        CooldownMonitoringStatus = "Loading skill references...";
+        try
+        {
+            var monitor = await SkillCooldownMonitor.StartAsync(
+                _selectedWindow,
+                _settings.SkillBarCrop,
+                _settings.SkillBarLayout,
+                _loadedBuildCandidates,
+                _referenceIcons,
+                _shutdownToken);
+            if (!_diagnosticsEnabled || _captureSession is null)
+            {
+                await monitor.DisposeAsync();
+                return;
+            }
+
+            _cooldownMonitor = monitor;
+            monitor.SnapshotUpdated += CooldownMonitor_SnapshotUpdated;
+            monitor.StatusChanged += CooldownMonitor_StatusChanged;
+            CooldownMonitoringStatus = "Matching the active skill bar...";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            CooldownMonitoringStatus = $"Cooldown monitoring unavailable: {exception.Message}";
+        }
+    }
+
+    private async Task StopCooldownMonitoringAsync()
+    {
+        if (_cooldownMonitor is not { } monitor)
+        {
+            return;
+        }
+
+        _cooldownMonitor = null;
+        monitor.SnapshotUpdated -= CooldownMonitor_SnapshotUpdated;
+        monitor.StatusChanged -= CooldownMonitor_StatusChanged;
+        await monitor.DisposeAsync();
+        CooldownRows.Clear();
+        if (_diagnosticsEnabled)
+        {
+            CooldownMonitoringStatus = "Cooldown monitoring stopped.";
+        }
+    }
+
+    private void CooldownMonitor_SnapshotUpdated(SkillCooldownDiagnosticsSnapshot snapshot)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_diagnosticsEnabled || _cooldownMonitor is null)
+            {
+                return;
+            }
+
+            CooldownRows.Clear();
+            foreach (var row in snapshot.Rows)
+            {
+                CooldownRows.Add(row);
+            }
+
+            CooldownMonitoringStatus = snapshot.Rows.Any(row => row.IsActive)
+                ? "Measured from the visible skill bar. Alternate candidates are inactive."
+                : "Waiting for a recognizable active skill bar.";
+        });
+    }
+
+    private void CooldownMonitor_StatusChanged(string message)
+    {
+        Dispatcher.BeginInvoke(() => CooldownMonitoringStatus = message);
     }
 
     private void CombatLogCaptureSession_LineRecognized(RecognizedCombatLogLine line)
@@ -622,15 +721,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_diagnosticsEnabled && _captureSession is not null)
         {
             _activityLogDebugWriter = _captureSession.DebugActivityWriter;
+            await StartCooldownMonitoringAsync();
         }
 
         if (!_diagnosticsEnabled)
         {
+            await StopCooldownMonitoringAsync();
             await StopFixtureCaptureAsync();
             DiagnosticsSummaryText.Text = string.Empty;
             OriginalDiagnosticPreview.Source = null;
             ProcessedDiagnosticPreview.Source = null;
             FixtureCaptureStatusText.Text = string.Empty;
+            CooldownRows.Clear();
+            CooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
         }
 
         AddActivity(

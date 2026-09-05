@@ -53,6 +53,8 @@ public sealed class BuildSkillCandidateResolverTests
 
         Assert.Equal([201, 301], candidates.GetSkillIds(SkillBarComponentKind.WeaponSkill1));
         Assert.Equal([204, 304], candidates.GetSkillIds(SkillBarComponentKind.WeaponSkill4));
+        Assert.Equal(1, candidates.GetWeaponSet(SkillBarComponentKind.WeaponSkill1, 201));
+        Assert.Equal(2, candidates.GetWeaponSet(SkillBarComponentKind.WeaponSkill1, 301));
         Assert.Equal([100], candidates.GetSkillIds(SkillBarComponentKind.HealSkill));
         Assert.Equal([101], candidates.GetSkillIds(SkillBarComponentKind.UtilitySkill1));
         Assert.Equal([104], candidates.GetSkillIds(SkillBarComponentKind.EliteSkill));

@@ -84,6 +84,41 @@
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
               <TextBlock FontWeight="SemiBold" Text="Diagnostics" />
+              <Border Margin="0,8,0,0" Padding="8" BorderBrush="Gainsboro" BorderThickness="1">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" Text="Current cooldowns" />
+                  <TextBlock Margin="0,3,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="{Binding CooldownMonitoringStatus}" />
+                  <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding CooldownRows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid>
+                          <Grid.Style>
+                            <Style TargetType="Grid">
+                              <Setter Property="Margin" Value="0,2" />
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding StartsSection}" Value="True">
+                                  <Setter Property="Margin" Value="0,12,0,2" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </Grid.Style>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="48" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" FontSize="11" Foreground="DimGray" Text="{Binding SlotLabel}" />
+                          <StackPanel Grid.Column="1">
+                            <TextBlock FontSize="11" TextTrimming="CharacterEllipsis" Text="{Binding SkillName}" />
+                            <TextBlock FontSize="10" Foreground="DimGray" Text="{Binding StatusText}" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Consolas" FontSize="11" Text="{Binding RemainingText}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
               <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
               <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
               <Separator Margin="0,16,0,12" />
