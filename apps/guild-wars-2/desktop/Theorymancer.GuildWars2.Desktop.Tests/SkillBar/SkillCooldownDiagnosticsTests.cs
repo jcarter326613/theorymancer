@@ -54,6 +54,7 @@ public sealed class SkillCooldownDiagnosticsTests
             new SkillCooldownCandidate(SkillBarComponentKind.HealSkill, 40, "Heal", null),
         };
         var snapshot = SkillCooldownDiagnostics.CreateSnapshot(
+            123,
             candidates,
             new Dictionary<SkillBarComponentKind, int>
             {

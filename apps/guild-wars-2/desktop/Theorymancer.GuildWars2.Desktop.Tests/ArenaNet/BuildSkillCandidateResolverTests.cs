@@ -141,4 +141,23 @@ public sealed class BuildSkillCandidateResolverTests
 
         Assert.Equal([401], candidates.GetSkillIds(SkillBarComponentKind.WeaponSkill1));
     }
+
+    [Fact]
+    public void Resolve_MapsTheReaperGreatswordFixtureToItsExpectedSkills()
+    {
+        var fixture = ReaperGreatswordFixture.Load();
+        var input = fixture.LoadBuildInput();
+
+        var candidates = BuildSkillCandidateResolver.Resolve(
+            input.CharacterName,
+            input.BuildTab.Build,
+            input.EquipmentTab,
+            input.Items,
+            input.Profession);
+
+        foreach (var expected in fixture.Slots)
+        {
+            Assert.Equal([expected.SkillId], candidates.GetSkillIds(expected.ComponentKind));
+        }
+    }
 }

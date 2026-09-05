@@ -103,11 +103,14 @@ public sealed record SkillCooldownDiagnosticsRow(
         : "-";
 }
 
-public sealed record SkillCooldownDiagnosticsSnapshot(IReadOnlyList<SkillCooldownDiagnosticsRow> Rows);
+public sealed record SkillCooldownDiagnosticsSnapshot(
+    long QpcTimestamp,
+    IReadOnlyList<SkillCooldownDiagnosticsRow> Rows);
 
 public static class SkillCooldownDiagnostics
 {
     public static SkillCooldownDiagnosticsSnapshot CreateSnapshot(
+        long qpcTimestamp,
         IReadOnlyList<SkillCooldownCandidate> candidates,
         IReadOnlyDictionary<SkillBarComponentKind, int> activeSkillIds,
         IReadOnlyDictionary<(SkillBarComponentKind Kind, int SkillId), SkillCooldownDisplay> displays)
@@ -161,7 +164,7 @@ public static class SkillCooldownDiagnostics
             }
         }
 
-        return new SkillCooldownDiagnosticsSnapshot(rows);
+        return new SkillCooldownDiagnosticsSnapshot(qpcTimestamp, rows);
     }
 
     private static readonly SkillBarComponentKind[] WeaponKinds =
@@ -217,24 +220,32 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
     private readonly SkillBarLayout _layout;
     private readonly IReadOnlyList<SkillCooldownCandidate> _candidates;
     private readonly IReadOnlyDictionary<SkillBarComponentKind, SkillCooldownReference> _references;
-    private readonly SkillCooldownDetector _detector = new();
-    private readonly SkillCooldownTimeEstimator _estimator = new(Stopwatch.Frequency);
+    private readonly ISkillCooldownDetector _detector;
+    private readonly ISkillCooldownTimeEstimator _estimator;
+    private readonly TimeSpan _captureInterval;
     private readonly SkillCooldownIdentityLock _activeCandidates = new();
     private readonly Dictionary<(SkillBarComponentKind Kind, int SkillId), SkillCooldownDisplay> _displays = [];
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _captureTask;
     private bool _disposed;
 
-    private SkillCooldownMonitor(
+    internal SkillCooldownMonitor(
         IScreenRegionCapture capture,
         SkillBarLayout layout,
         IReadOnlyList<SkillCooldownCandidate> candidates,
-        IReadOnlyList<SkillCooldownReference> references)
+        IReadOnlyList<SkillCooldownReference> references,
+        ISkillCooldownDetector detector,
+        ISkillCooldownTimeEstimator estimator,
+        TimeSpan captureInterval)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(captureInterval, TimeSpan.Zero);
         _capture = capture;
         _layout = layout;
         _candidates = candidates;
         _references = references.ToDictionary(reference => reference.Kind);
+        _detector = detector;
+        _estimator = estimator;
+        _captureInterval = captureInterval;
         foreach (var reference in references)
         {
             var candidate = candidates.Single(candidate =>
@@ -287,8 +298,15 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
         var capture = new VisibleScreenRegionCapture(gameWindow, skillBarCrop);
         var startupFrame = await capture.CaptureAsync(cancellationToken);
         var references = IdentifyInitialReferences(startupFrame, layout, candidates);
-        var monitor = new SkillCooldownMonitor(capture, layout, candidates, references);
-        monitor.PublishSnapshot();
+        var monitor = new SkillCooldownMonitor(
+            capture,
+            layout,
+            candidates,
+            references,
+            new SkillCooldownDetector(),
+            new SkillCooldownTimeEstimator(Stopwatch.Frequency),
+            TimeSpan.FromSeconds(1.0 / CaptureFramesPerSecond));
+        monitor.PublishSnapshot(startupFrame.QpcTimestamp);
         return monitor;
     }
 
@@ -318,7 +336,7 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
 
     private async Task CaptureLoopAsync()
     {
-        var frameIntervalTicks = Stopwatch.Frequency / CaptureFramesPerSecond;
+        var frameIntervalTicks = (long)Math.Round(_captureInterval.TotalSeconds * Stopwatch.Frequency);
         var nextFrameQpc = Stopwatch.GetTimestamp();
         try
         {
@@ -370,7 +388,7 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
             _displays[(candidate.Kind, candidate.SkillId)] = ToDisplay(observation, estimate);
         }
 
-        PublishSnapshot();
+        PublishSnapshot(frame.QpcTimestamp);
     }
 
     private static IReadOnlyList<SkillCooldownReference> IdentifyInitialReferences(
@@ -463,7 +481,8 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
             : new SkillCooldownDisplay(SkillCooldownDisplayState.Unknown, null);
     }
 
-    private void PublishSnapshot() => SnapshotUpdated?.Invoke(SkillCooldownDiagnostics.CreateSnapshot(
+    private void PublishSnapshot(long qpcTimestamp) => SnapshotUpdated?.Invoke(SkillCooldownDiagnostics.CreateSnapshot(
+        qpcTimestamp,
         _candidates,
         _activeCandidates.Candidates.ToDictionary(pair => pair.Key, pair => pair.Value.SkillId),
         _displays));

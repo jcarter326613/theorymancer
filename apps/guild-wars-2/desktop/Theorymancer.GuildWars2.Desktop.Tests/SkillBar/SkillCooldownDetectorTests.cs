@@ -56,6 +56,25 @@ public sealed class SkillCooldownDetectorTests
                 $"{observation.Kind}={observation.VisibleWipeFraction:F3}")));
     }
 
+    [Fact]
+    public void Detect_DistinguishesIconHighlightsFromLateCountdownGlyphs()
+    {
+        var fixture = CooldownTimelineFixture.Load();
+        var detector = new SkillCooldownDetector();
+
+        var beforeWeapon3 = Assert.Single(
+            detector.Detect(fixture.GetFrame(23), fixture.Layout, fixture.References).Observations,
+            observation => observation.Kind == SkillBarComponentKind.WeaponSkill3);
+        Assert.Equal(SkillCooldownState.Available, beforeWeapon3.State);
+        Assert.Null(beforeWeapon3.VisibleWipeFraction);
+
+        var lateWeapon2 = Assert.Single(
+            detector.Detect(fixture.GetFrame(40), fixture.Layout, fixture.References).Observations,
+            observation => observation.Kind == SkillBarComponentKind.WeaponSkill2);
+        Assert.Equal(SkillCooldownState.OnCooldown, lateWeapon2.State);
+        Assert.NotNull(lateWeapon2.VisibleWipeFraction);
+    }
+
     private static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "SkillBar", "Fixtures");
 
     private static SkillBarLayout CreateLayout(CapturedFrame frame, IReadOnlyList<CooldownSlot> slots) => new(

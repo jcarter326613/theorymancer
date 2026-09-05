@@ -1,6 +1,6 @@
+using System.Text.Json;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Ocr;
 using Theorymancer.GuildWars2.Desktop.CombatLog.Sessions;
-using System.Text.Json;
 
 namespace Theorymancer.GuildWars2.Desktop.Tests;
 

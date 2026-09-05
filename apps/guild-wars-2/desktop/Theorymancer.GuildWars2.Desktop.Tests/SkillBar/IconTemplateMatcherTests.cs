@@ -40,6 +40,28 @@ public sealed class IconTemplateMatcherTests
         }
     }
 
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(1.0)]
+    [InlineData(2.0)]
+    public void MatchAt_RanksTheExpectedReaperIconFirstAtEachFixtureSlot(double scaleFactor)
+    {
+        var fixture = ReaperGreatswordFixture.Load();
+        var frame = fixture.LoadScaledScreenshot(scaleFactor);
+
+        foreach (var expected in fixture.Slots)
+        {
+            var matches = fixture.Slots.Select(candidate => IconTemplateMatcher.MatchAt(
+                frame,
+                expected.ToBounds(scaleFactor),
+                fixture.GetIconPath(candidate),
+                candidate.Name,
+                candidate.SkillId)).ToList();
+
+            Assert.Equal(expected.SkillId, matches.MaxBy(match => match.Score)?.SkillId);
+        }
+    }
+
     private static CapturedFrame CreateFrameWithIcon(string iconPath, int width, int height, int x, int y, int size)
     {
         var stride = width * 4;
