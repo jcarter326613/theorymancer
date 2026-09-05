@@ -73,11 +73,18 @@ public sealed class SkillCooldownDetectorTests
             File.ReadAllText(Path.Combine(FixturesDirectory, fixture.ReferenceFixture, "expectations.json")),
             JsonOptions)
             ?? throw new InvalidOperationException($"Reference fixture is invalid: {fixture.ReferenceFixture}");
-        return reference.Slots.Select(slot => new SkillCooldownReference(
-            slot.ComponentKind,
-            slot.SkillId,
-            Path.Combine(FixturesDirectory, fixture.ReferenceFixture, "icons", slot.IconFile)))
-            .ToList();
+        return reference.Slots.Select(slot =>
+        {
+            var expected = fixture.Slots.Single(expected => expected.ComponentKind == slot.ComponentKind);
+            var iconPath = Path.Combine(FixturesDirectory, fixture.ReferenceFixture, "icons", slot.IconFile);
+            var resolvedReference = SkillCooldownDetector.ResolveReference(new SkillCooldownReference(
+                slot.ComponentKind,
+                slot.SkillId,
+                iconPath,
+                new ScreenBounds(expected.X, expected.Y, expected.Width, expected.Height)));
+            // A runtime match or template load would fail against this deliberately invalid path.
+            return resolvedReference with { IconPath = $"startup-resolved-{slot.SkillId}.png" };
+        }).ToList();
     }
 
     private static CooldownFixture LoadCooldownFixture(string fixtureName) =>

@@ -14,7 +14,17 @@ public enum SkillCooldownState
 public sealed record SkillCooldownReference(
     SkillBarComponentKind Kind,
     int SkillId,
-    string IconPath);
+    string IconPath,
+    ScreenBounds? SlotBounds = null)
+{
+    internal IconLuminanceTemplate? IconTemplate { get; init; }
+}
+
+internal sealed record IconLuminanceTemplate(
+    int Width,
+    int Height,
+    IReadOnlyList<byte> Luminances,
+    IReadOnlyList<byte> Rgb);
 
 public sealed record SkillCooldownObservation(
     SkillBarComponentKind Kind,
@@ -40,9 +50,8 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
     private const int AngularSamples = 72;
     private const double CooldownDarkFractionMinimum = 0.20;
     private const double CooldownMaximumIconScore = 0.75;
-    private const double MeasurementMaximumIconScore = 0.80;
     private const double MeasurementMinimumDarkFraction = 0.01;
-    private const int MinimumCountdownGlyphPixels = 12;
+    private const int MinimumCountdownGlyphPixels = 100;
     private static readonly double[] RadialSamples = [0.18, 0.26, 0.34, 0.42];
     private static readonly ConcurrentDictionary<string, IconLuminanceTemplate> IconTemplates = new();
 
@@ -61,6 +70,11 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
         return new SkillCooldownDetection(frame.QpcTimestamp, observations);
     }
 
+    public static SkillCooldownReference ResolveReference(SkillCooldownReference reference) => reference with
+    {
+        IconTemplate = IconTemplates.GetOrAdd(reference.IconPath, LoadIconTemplate),
+    };
+
     private SkillCooldownObservation DetectSlot(
         CapturedFrame frame,
         SkillBarComponent component,
@@ -72,19 +86,33 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
         }
 
         var reference = references[0];
-        var bounds = component.ToPixelBounds(frame.Width, frame.Height);
+        var bounds = reference.SlotBounds ?? component.ToPixelBounds(frame.Width, frame.Height);
         if (!Fits(frame, bounds))
         {
             return new SkillCooldownObservation(component.Kind, reference.SkillId, SkillCooldownState.Unknown, 0, null);
         }
 
-        var iconScore = IconTemplateMatcher.MatchAt(
-            frame,
-            bounds,
-            reference.IconPath,
-            component.Kind.ToString(),
-            reference.SkillId).Score;
-        var template = IconTemplates.GetOrAdd(reference.IconPath, LoadIconTemplate);
+        var template = reference.IconTemplate;
+        if (template is null)
+        {
+            if (reference.SlotBounds is not null)
+            {
+                return new SkillCooldownObservation(component.Kind, reference.SkillId, SkillCooldownState.Unknown, 0, null);
+            }
+
+            template = IconTemplates.GetOrAdd(reference.IconPath, LoadIconTemplate);
+        }
+
+        // Runtime references use their calibrated slot bounds. Keep the search fallback
+        // for callers that only provide a component layout.
+        double? iconScore = reference.SlotBounds is null
+            ? IconTemplateMatcher.MatchAt(
+                frame,
+                bounds,
+                reference.IconPath,
+                component.Kind.ToString(),
+                reference.SkillId).Score
+            : GetFixedIconScore(frame, bounds, template);
         var darkSegments = 0;
         var usableSegments = 0;
         for (var segment = 0; segment < AngularSamples; segment++)
@@ -127,11 +155,14 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
 
         var darkFraction = (double)darkSegments / usableSegments;
         var visibleWipeFraction = 1 - darkFraction;
-        if (darkFraction >= CooldownDarkFractionMinimum && iconScore < CooldownMaximumIconScore)
+        if (darkFraction >= CooldownDarkFractionMinimum)
         {
+            var iconConfidence = iconScore is null
+                ? 1
+                : (CooldownMaximumIconScore - iconScore.Value) / CooldownMaximumIconScore;
             var confidence = Math.Clamp(
                 ((darkFraction - CooldownDarkFractionMinimum) / (1 - CooldownDarkFractionMinimum) +
-                 (CooldownMaximumIconScore - iconScore) / CooldownMaximumIconScore) / 2,
+                 iconConfidence) / 2,
                 0,
                 1);
             return new SkillCooldownObservation(
@@ -143,19 +174,17 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
         }
 
         if (darkFraction >= MeasurementMinimumDarkFraction &&
-            iconScore < MeasurementMaximumIconScore &&
-            CountCountdownGlyphPixels(frame, bounds) >= MinimumCountdownGlyphPixels)
+            CountCountdownGlyphPixels(frame, bounds, template) >= MinimumCountdownGlyphPixels)
         {
             // Confirm the active overlay without interpreting the displayed number.
             var confidence = Math.Clamp(
-                (darkFraction / CooldownDarkFractionMinimum +
-                 (MeasurementMaximumIconScore - iconScore) / MeasurementMaximumIconScore) / 2,
+                darkFraction / CooldownDarkFractionMinimum,
                 0,
                 1);
             return new SkillCooldownObservation(
                 component.Kind,
                 reference.SkillId,
-                SkillCooldownState.Available,
+                SkillCooldownState.OnCooldown,
                 confidence,
                 visibleWipeFraction);
         }
@@ -200,7 +229,10 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
         return template.Luminances[referenceY * template.Width + referenceX];
     }
 
-    private static int CountCountdownGlyphPixels(CapturedFrame frame, ScreenBounds bounds)
+    private static int CountCountdownGlyphPixels(
+        CapturedFrame frame,
+        ScreenBounds bounds,
+        IconLuminanceTemplate template)
     {
         var count = 0;
         var left = bounds.X + (int)Math.Round(bounds.Width * 0.2);
@@ -215,8 +247,18 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
                 var blue = frame.BgraPixels[index];
                 var green = frame.BgraPixels[index + 1];
                 var red = frame.BgraPixels[index + 2];
-                if (GetLuminance(red, green, blue) >= 180 &&
-                    Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue)) <= 50)
+                var luminance = GetLuminance(red, green, blue);
+                var saturation = Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue));
+                var referenceIndex = GetReferenceRgbIndex(bounds, template, x, y);
+                var referenceRed = template.Rgb[referenceIndex];
+                var referenceGreen = template.Rgb[referenceIndex + 1];
+                var referenceBlue = template.Rgb[referenceIndex + 2];
+                var referenceLuminance = GetLuminance(referenceRed, referenceGreen, referenceBlue);
+                var referenceSaturation = Math.Max(referenceRed, Math.Max(referenceGreen, referenceBlue)) -
+                    Math.Min(referenceRed, Math.Min(referenceGreen, referenceBlue));
+                var isReferenceGlyphLike = referenceLuminance >= 160 && referenceSaturation <= 60;
+                var isNewGlyphPixel = luminance >= referenceLuminance + 35;
+                if (luminance >= 180 && saturation <= 50 && !isReferenceGlyphLike && isNewGlyphPixel)
                 {
                     count++;
                 }
@@ -229,22 +271,117 @@ public sealed class SkillCooldownDetector : ISkillCooldownDetector
     private static byte GetLuminance(byte red, byte green, byte blue) =>
         (byte)((77 * red + 150 * green + 29 * blue) >> 8);
 
-    private static IconLuminanceTemplate LoadIconTemplate(string path)
+    private static int GetReferenceRgbIndex(
+        ScreenBounds bounds,
+        IconLuminanceTemplate template,
+        int x,
+        int y)
     {
-        using var bitmap = new Bitmap(path);
-        var luminances = new byte[bitmap.Width * bitmap.Height];
-        for (var y = 0; y < bitmap.Height; y++)
+        var referenceX = Math.Clamp(
+            (int)Math.Round((x - bounds.X) * (template.Width - 1) / (double)(bounds.Width - 1)),
+            0,
+            template.Width - 1);
+        var referenceY = Math.Clamp(
+            (int)Math.Round((y - bounds.Y) * (template.Height - 1) / (double)(bounds.Height - 1)),
+            0,
+            template.Height - 1);
+        return (referenceY * template.Width + referenceX) * 3;
+    }
+
+    private static double GetFixedIconScore(
+        CapturedFrame frame,
+        ScreenBounds bounds,
+        IconLuminanceTemplate template)
+    {
+        Span<double> frameSums = stackalloc double[3];
+        Span<double> templateSums = stackalloc double[3];
+        var sampleCount = bounds.Width * bounds.Height;
+        for (var y = 0; y < bounds.Height; y++)
         {
-            for (var x = 0; x < bitmap.Width; x++)
+            for (var x = 0; x < bounds.Width; x++)
             {
-                var color = bitmap.GetPixel(x, y);
-                luminances[y * bitmap.Width + x] = GetLuminance(color.R, color.G, color.B);
+                var frameIndex = (bounds.Y + y) * frame.Stride + (bounds.X + x) * 4;
+                var templateIndex = (Math.Min(template.Height - 1, (int)((long)y * template.Height / bounds.Height)) * template.Width +
+                    Math.Min(template.Width - 1, (int)((long)x * template.Width / bounds.Width))) * 3;
+                frameSums[0] += frame.BgraPixels[frameIndex + 2];
+                frameSums[1] += frame.BgraPixels[frameIndex + 1];
+                frameSums[2] += frame.BgraPixels[frameIndex];
+                templateSums[0] += template.Rgb[templateIndex];
+                templateSums[1] += template.Rgb[templateIndex + 1];
+                templateSums[2] += template.Rgb[templateIndex + 2];
             }
         }
 
-        return new IconLuminanceTemplate(bitmap.Width, bitmap.Height, luminances);
+        var covariance = 0.0;
+        var frameEnergy = 0.0;
+        var templateEnergy = 0.0;
+        for (var y = 0; y < bounds.Height; y++)
+        {
+            for (var x = 0; x < bounds.Width; x++)
+            {
+                var frameIndex = (bounds.Y + y) * frame.Stride + (bounds.X + x) * 4;
+                var templateIndex = (Math.Min(template.Height - 1, (int)((long)y * template.Height / bounds.Height)) * template.Width +
+                    Math.Min(template.Width - 1, (int)((long)x * template.Width / bounds.Width))) * 3;
+                for (var channel = 0; channel < 3; channel++)
+                {
+                    var frameValue = frame.BgraPixels[frameIndex + 2 - channel] - frameSums[channel] / sampleCount;
+                    var templateValue = template.Rgb[templateIndex + channel] - templateSums[channel] / sampleCount;
+                    covariance += frameValue * templateValue;
+                    frameEnergy += frameValue * frameValue;
+                    templateEnergy += templateValue * templateValue;
+                }
+            }
+        }
+
+        if (frameEnergy < double.Epsilon || templateEnergy < double.Epsilon)
+        {
+            return 0;
+        }
+
+        return Math.Clamp(0.5 + covariance / Math.Sqrt(frameEnergy * templateEnergy) / 2, 0, 1);
     }
 
-    private sealed record IconLuminanceTemplate(int Width, int Height, IReadOnlyList<byte> Luminances);
+    private static IconLuminanceTemplate LoadIconTemplate(string path)
+    {
+        using var bitmap = new Bitmap(path);
+        var bounds = TrimBlackBorder(bitmap);
+        var luminances = new byte[bounds.Width * bounds.Height];
+        var rgb = new byte[bounds.Width * bounds.Height * 3];
+        for (var y = 0; y < bounds.Height; y++)
+        {
+            for (var x = 0; x < bounds.Width; x++)
+            {
+                var color = bitmap.GetPixel(bounds.X + x, bounds.Y + y);
+                luminances[y * bounds.Width + x] = GetLuminance(color.R, color.G, color.B);
+                var rgbIndex = (y * bounds.Width + x) * 3;
+                rgb[rgbIndex] = color.R;
+                rgb[rgbIndex + 1] = color.G;
+                rgb[rgbIndex + 2] = color.B;
+            }
+        }
+
+        return new IconLuminanceTemplate(bounds.Width, bounds.Height, luminances, rgb);
+    }
+
+    private static Rectangle TrimBlackBorder(Bitmap bitmap)
+    {
+        var left = 0;
+        var right = bitmap.Width - 1;
+        var top = 0;
+        var bottom = bitmap.Height - 1;
+        while (left < right && IsMostlyBlackColumn(bitmap, left, top, bottom)) left++;
+        while (right > left && IsMostlyBlackColumn(bitmap, right, top, bottom)) right--;
+        while (top < bottom && IsMostlyBlackRow(bitmap, top, left, right)) top++;
+        while (bottom > top && IsMostlyBlackRow(bitmap, bottom, left, right)) bottom--;
+        return Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+    }
+
+    private static bool IsMostlyBlackColumn(Bitmap bitmap, int x, int top, int bottom) =>
+        Enumerable.Range(top, bottom - top + 1).Count(y => IsBlack(bitmap.GetPixel(x, y))) >= (bottom - top + 1) * 0.9;
+
+    private static bool IsMostlyBlackRow(Bitmap bitmap, int y, int left, int right) =>
+        Enumerable.Range(left, right - left + 1).Count(x => IsBlack(bitmap.GetPixel(x, y))) >= (right - left + 1) * 0.9;
+
+    private static bool IsBlack(Color color) => color.R <= 12 && color.G <= 12 && color.B <= 12;
 
 }

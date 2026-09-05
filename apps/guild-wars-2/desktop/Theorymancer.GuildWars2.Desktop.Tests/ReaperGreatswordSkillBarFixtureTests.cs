@@ -83,6 +83,26 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
 
         Assert.True(detection.IsUsable, detection.Message);
         var layout = Assert.IsType<SkillBarLayout>(detection.Layout);
+        AssertEvenlySpaced(
+            layout,
+            frame,
+            [
+                SkillBarComponentKind.WeaponSkill1,
+                SkillBarComponentKind.WeaponSkill2,
+                SkillBarComponentKind.WeaponSkill3,
+                SkillBarComponentKind.WeaponSkill4,
+                SkillBarComponentKind.WeaponSkill5,
+            ]);
+        AssertEvenlySpaced(
+            layout,
+            frame,
+            [
+                SkillBarComponentKind.HealSkill,
+                SkillBarComponentKind.UtilitySkill1,
+                SkillBarComponentKind.UtilitySkill2,
+                SkillBarComponentKind.UtilitySkill3,
+                SkillBarComponentKind.EliteSkill,
+            ]);
         var errors = new List<string>();
         foreach (var expected in fixture.Slots)
         {
@@ -233,7 +253,23 @@ public sealed class ReaperGreatswordSkillBarFixtureTests
             Math.Abs(actual.Height - expected.Height) <= tolerance
             ? null
             : $"{kind}: expected ({expected.X}, {expected.Y}, {expected.Width}, {expected.Height}) +/- {tolerance}; " +
-              $"detected ({actual.X}, {actual.Y}, {actual.Width}, {actual.Height}).";
+               $"detected ({actual.X}, {actual.Y}, {actual.Width}, {actual.Height}).";
+    }
+
+    private static void AssertEvenlySpaced(
+        SkillBarLayout layout,
+        CapturedFrame frame,
+        IReadOnlyList<SkillBarComponentKind> kinds)
+    {
+        var centers = kinds
+            .Select(kind => Assert.Single(layout.Components, component => component.Kind == kind)
+                .ToPixelBounds(frame.Width, frame.Height))
+            .Select(bounds => bounds.X + bounds.Width / 2.0)
+            .ToList();
+        var gaps = centers.Zip(centers.Skip(1), (left, right) => right - left).ToList();
+        Assert.True(
+            gaps.Max() - gaps.Min() <= 1,
+            $"Expected evenly spaced slots, but measured center gaps: {string.Join(", ", gaps.Select(gap => gap.ToString("F1")))}.");
     }
 
     private sealed record BuildInput(

@@ -212,13 +212,11 @@ public static class SkillCooldownDiagnostics
 
 public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
 {
-    private const int CaptureFramesPerSecond = 4;
-    private const double IdentificationMinimumScore = 0.60;
-    private const double IdentificationMinimumMargin = 0.035;
+    private const int CaptureFramesPerSecond = 12;
     private readonly IScreenRegionCapture _capture;
     private readonly SkillBarLayout _layout;
     private readonly IReadOnlyList<SkillCooldownCandidate> _candidates;
-    private readonly IReadOnlyDictionary<SkillBarComponentKind, IReadOnlyList<SkillCooldownCandidate>> _candidatesByKind;
+    private readonly IReadOnlyDictionary<SkillBarComponentKind, SkillCooldownReference> _references;
     private readonly SkillCooldownDetector _detector = new();
     private readonly SkillCooldownTimeEstimator _estimator = new(Stopwatch.Frequency);
     private readonly SkillCooldownIdentityLock _activeCandidates = new();
@@ -230,14 +228,20 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
     private SkillCooldownMonitor(
         IScreenRegionCapture capture,
         SkillBarLayout layout,
-        IReadOnlyList<SkillCooldownCandidate> candidates)
+        IReadOnlyList<SkillCooldownCandidate> candidates,
+        IReadOnlyList<SkillCooldownReference> references)
     {
         _capture = capture;
         _layout = layout;
         _candidates = candidates;
-        _candidatesByKind = candidates
-            .GroupBy(candidate => candidate.Kind)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<SkillCooldownCandidate>)group.ToList());
+        _references = references.ToDictionary(reference => reference.Kind);
+        foreach (var reference in references)
+        {
+            var candidate = candidates.Single(candidate =>
+                candidate.Kind == reference.Kind && candidate.SkillId == reference.SkillId);
+            _activeCandidates.TryLock(candidate);
+        }
+
         _captureTask = Task.Run(CaptureLoopAsync);
     }
 
@@ -280,10 +284,10 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
             }
         }
 
-        var monitor = new SkillCooldownMonitor(
-            new VisibleScreenRegionCapture(gameWindow, skillBarCrop),
-            layout,
-            candidates);
+        var capture = new VisibleScreenRegionCapture(gameWindow, skillBarCrop);
+        var startupFrame = await capture.CaptureAsync(cancellationToken);
+        var references = IdentifyInitialReferences(startupFrame, layout, candidates);
+        var monitor = new SkillCooldownMonitor(capture, layout, candidates, references);
         monitor.PublishSnapshot();
         return monitor;
     }
@@ -348,19 +352,7 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
 
     private void ProcessFrame(CapturedFrame frame)
     {
-        foreach (var component in _layout.Components)
-        {
-            if (!_activeCandidates.IsLocked(component.Kind) &&
-                TryIdentifyActiveCandidate(frame, component, out var candidate))
-            {
-                _activeCandidates.TryLock(candidate);
-            }
-        }
-
-        var references = _activeCandidates.Candidates.Values
-            .Select(candidate => new SkillCooldownReference(candidate.Kind, candidate.SkillId, candidate.IconPath!))
-            .ToList();
-        var detection = _detector.Detect(frame, _layout, references);
+        var detection = _detector.Detect(frame, _layout, _references.Values.ToList());
         foreach (var observation in detection.Observations)
         {
             if (!_activeCandidates.Candidates.TryGetValue(observation.Kind, out var candidate))
@@ -381,41 +373,71 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
         PublishSnapshot();
     }
 
-    private bool TryIdentifyActiveCandidate(
+    private static IReadOnlyList<SkillCooldownReference> IdentifyInitialReferences(
         CapturedFrame frame,
-        SkillBarComponent component,
-        out SkillCooldownCandidate candidate)
+        SkillBarLayout layout,
+        IReadOnlyList<SkillCooldownCandidate> candidates)
     {
-        candidate = null!;
-        if (!_candidatesByKind.TryGetValue(component.Kind, out var candidates))
+        var componentsByKind = layout.Components.ToDictionary(component => component.Kind);
+        var weaponSet = SelectWeaponSet(frame, componentsByKind, candidates);
+        var references = new List<SkillCooldownReference>();
+        foreach (var component in layout.Components.OrderBy(component => component.Kind))
         {
-            return false;
+            if (IsWeaponSkill(component.Kind) && weaponSet is null)
+            {
+                continue;
+            }
+
+            var candidate = candidates.SingleOrDefault(candidate =>
+                candidate.Kind == component.Kind &&
+                (!IsWeaponSkill(component.Kind) || candidate.WeaponSet == weaponSet));
+            if (candidate?.IconPath is not null)
+            {
+                // Calibration owns the slot position. Startup matching only selects the weapon set.
+                var bounds = component.ToPixelBounds(frame.Width, frame.Height);
+                references.Add(SkillCooldownDetector.ResolveReference(new SkillCooldownReference(
+                    candidate.Kind,
+                    candidate.SkillId,
+                    candidate.IconPath,
+                    bounds)));
+            }
         }
 
-        var bounds = component.ToPixelBounds(frame.Width, frame.Height);
-        var ranked = candidates
-            .Where(value => value.IconPath is not null && _activeCandidates.CanIdentify(value))
-            .Select(value => (Candidate: value, Score: IconTemplateMatcher.MatchAt(
-                frame,
-                bounds,
-                value.IconPath!,
-                value.Name,
-                value.SkillId).Score))
-            .OrderByDescending(match => match.Score)
-            .ToList();
-        if (ranked.Count == 0 || ranked[0].Score < IdentificationMinimumScore)
-        {
-            return false;
-        }
-
-        if (ranked.Count > 1 && ranked[0].Score - ranked[1].Score < IdentificationMinimumMargin)
-        {
-            return false;
-        }
-
-        candidate = ranked[0].Candidate;
-        return true;
+        return references;
     }
+
+    private static int? SelectWeaponSet(
+        CapturedFrame frame,
+        IReadOnlyDictionary<SkillBarComponentKind, SkillBarComponent> componentsByKind,
+        IReadOnlyList<SkillCooldownCandidate> candidates)
+    {
+        var scores = candidates
+            .Where(candidate => IsWeaponSkill(candidate.Kind) && candidate.WeaponSet is not null)
+            .GroupBy(candidate => candidate.WeaponSet!.Value)
+            .Select(group =>
+            {
+                var scoredMatches = group
+                    .Where(candidate => candidate.IconPath is not null)
+                    .Select(candidate => IconTemplateMatcher.MatchAt(
+                        frame,
+                        componentsByKind[candidate.Kind].ToPixelBounds(frame.Width, frame.Height),
+                        candidate.IconPath!,
+                        candidate.Name,
+                        candidate.SkillId).Score)
+                    .ToList();
+                return (WeaponSet: group.Key, Score: scoredMatches.Count == 0 ? 0 : scoredMatches.Average());
+            })
+            .OrderByDescending(result => result.Score)
+            .ToList();
+        return scores.Count == 0 ? null : scores[0].WeaponSet;
+    }
+
+    private static bool IsWeaponSkill(SkillBarComponentKind kind) => kind is
+        SkillBarComponentKind.WeaponSkill1 or
+        SkillBarComponentKind.WeaponSkill2 or
+        SkillBarComponentKind.WeaponSkill3 or
+        SkillBarComponentKind.WeaponSkill4 or
+        SkillBarComponentKind.WeaponSkill5;
 
     private static SkillCooldownDisplay ToDisplay(
         SkillCooldownObservation observation,
@@ -424,6 +446,11 @@ public sealed class SkillCooldownMonitor : IAsyncDisposable, IDisposable
         if (estimate is { State: SkillCooldownEstimateState.Tracking })
         {
             return new SkillCooldownDisplay(SkillCooldownDisplayState.Cooling, estimate.Remaining);
+        }
+
+        if (estimate is { State: SkillCooldownEstimateState.Completed })
+        {
+            return new SkillCooldownDisplay(SkillCooldownDisplayState.Ready, null);
         }
 
         if (observation.State == SkillCooldownState.Available && observation.VisibleWipeFraction is null)

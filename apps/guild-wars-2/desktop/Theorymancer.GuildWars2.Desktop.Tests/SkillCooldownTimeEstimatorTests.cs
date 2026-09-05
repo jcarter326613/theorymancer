@@ -5,20 +5,18 @@ namespace Theorymancer.GuildWars2.Desktop.Tests;
 public sealed class SkillCooldownTimeEstimatorTests
 {
     [Fact]
-    public void Observe_RequiresHalfBlackCoverageBeforeOpeningACooldown()
+    public void Observe_EstimatesCooldownFirstSeenPastHalfway()
     {
         var estimator = new SkillCooldownTimeEstimator(1_000);
 
         Assert.Null(estimator.Observe(Sample(0, SkillCooldownState.OnCooldown, 0.7)));
-        Assert.Null(estimator.Observe(Sample(1_000, SkillCooldownState.OnCooldown, 0.6)));
-        Assert.Null(estimator.Observe(Sample(2_000, SkillCooldownState.OnCooldown, 0.4)));
-        Assert.Null(estimator.Observe(Sample(3_000, SkillCooldownState.OnCooldown, 0.5)));
+        Assert.Null(estimator.Observe(Sample(1_000, SkillCooldownState.OnCooldown, 0.8)));
 
         var estimate = Assert.IsType<SkillCooldownTimeEstimate>(
-            estimator.Observe(Sample(4_000, SkillCooldownState.OnCooldown, 0.6)));
+            estimator.Observe(Sample(2_000, SkillCooldownState.OnCooldown, 0.9)));
 
         Assert.Equal(SkillCooldownEstimateState.Tracking, estimate.State);
-        Assert.Equal(TimeSpan.FromSeconds(4), estimate.Remaining);
+        Assert.Equal(TimeSpan.FromSeconds(1), estimate.Remaining);
         Assert.Equal(3, estimate.SampleCount);
     }
 
@@ -61,6 +59,41 @@ public sealed class SkillCooldownTimeEstimatorTests
 
         Assert.Null(estimator.Observe(Sample(10_000, SkillCooldownState.OnCooldown, 0.7)));
         Assert.Null(estimator.Observe(Sample(11_000, SkillCooldownState.OnCooldown, 0.6)));
+    }
+
+    [Fact]
+    public void Observe_ReopensCooldownWhenARecastOccursBeforeAnAvailableSample()
+    {
+        var estimator = new SkillCooldownTimeEstimator(1_000);
+
+        _ = estimator.Observe(Sample(0, SkillCooldownState.OnCooldown, 0.1));
+        _ = estimator.Observe(Sample(1_000, SkillCooldownState.OnCooldown, 0.3));
+        _ = estimator.Observe(Sample(2_000, SkillCooldownState.OnCooldown, 0.5));
+
+        Assert.Null(estimator.Observe(Sample(3_000, SkillCooldownState.OnCooldown, 0.1)));
+        Assert.Null(estimator.Observe(Sample(4_000, SkillCooldownState.OnCooldown, 0.2)));
+
+        var recast = Assert.IsType<SkillCooldownTimeEstimate>(
+            estimator.Observe(Sample(5_000, SkillCooldownState.OnCooldown, 0.3)));
+
+        Assert.Equal(SkillCooldownEstimateState.Tracking, recast.State);
+        Assert.Equal(3, recast.SampleCount);
+        Assert.Equal(TimeSpan.FromSeconds(7), recast.Remaining);
+    }
+
+    [Fact]
+    public void Observe_CompletesInsteadOfReportingAZeroSecondCooldown()
+    {
+        var estimator = new SkillCooldownTimeEstimator(1_000);
+
+        Assert.Null(estimator.Observe(Sample(0, SkillCooldownState.OnCooldown, 0.8)));
+        Assert.Null(estimator.Observe(Sample(1_000, SkillCooldownState.OnCooldown, 0.95)));
+
+        var completion = Assert.IsType<SkillCooldownTimeEstimate>(
+            estimator.Observe(Sample(2_000, SkillCooldownState.OnCooldown, 1)));
+
+        Assert.Equal(SkillCooldownEstimateState.Completed, completion.State);
+        Assert.Equal(TimeSpan.Zero, completion.Remaining);
     }
 
     private static SkillCooldownWipeSample Sample(

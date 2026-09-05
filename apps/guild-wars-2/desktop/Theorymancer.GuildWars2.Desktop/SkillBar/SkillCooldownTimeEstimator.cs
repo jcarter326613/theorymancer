@@ -30,8 +30,12 @@ public interface ISkillCooldownTimeEstimator
 
 public sealed class SkillCooldownTimeEstimator : ISkillCooldownTimeEstimator
 {
-    private const double AcquisitionMaximumVisibleWipeFraction = 0.5;
+    private const double RecastVisibleWipeDropMinimum = 0.35;
     private const int MinimumSamplesForEstimate = 3;
+    private const int MaximumSamplesForEstimate = 48;
+    private const double MinimumEstimateSpanSeconds = 0.25;
+    private const double CompletionVisibleWipeMinimum = 0.98;
+    private const double MinimumNonZeroRemainingSeconds = 0.1;
     private readonly long _qpcFrequency;
     private readonly Dictionary<(SkillBarComponentKind Kind, int SkillId), ActiveCooldown> _activeCooldowns = [];
 
@@ -47,8 +51,7 @@ public sealed class SkillCooldownTimeEstimator : ISkillCooldownTimeEstimator
         if (!_activeCooldowns.TryGetValue(key, out var cooldown))
         {
             if (sample.State != SkillCooldownState.OnCooldown ||
-                sample.VisibleWipeFraction is not { } initialWipe ||
-                initialWipe > AcquisitionMaximumVisibleWipeFraction)
+                sample.VisibleWipeFraction is null)
             {
                 return null;
             }
@@ -70,6 +73,16 @@ public sealed class SkillCooldownTimeEstimator : ISkillCooldownTimeEstimator
                 cooldown.Samples.Count);
         }
 
+        if (sample.State == SkillCooldownState.OnCooldown &&
+            sample.VisibleWipeFraction is { } recastVisibleWipeFraction &&
+            cooldown.Samples.Count > 0 &&
+            recastVisibleWipeFraction + RecastVisibleWipeDropMinimum < cooldown.Samples[^1].VisibleWipeFraction)
+        {
+            // A new cast can begin before the monitor samples an available frame.
+            cooldown = new ActiveCooldown();
+            _activeCooldowns[key] = cooldown;
+        }
+
         if (sample.VisibleWipeFraction is not { } visibleWipeFraction ||
             visibleWipeFraction is < 0 or > 1 ||
             cooldown.Samples.Count > 0 && sample.QpcTimestamp <= cooldown.Samples[^1].QpcTimestamp)
@@ -78,13 +91,34 @@ public sealed class SkillCooldownTimeEstimator : ISkillCooldownTimeEstimator
         }
 
         cooldown.Samples.Add(new WipeSample(sample.QpcTimestamp, visibleWipeFraction, sample.Confidence));
+        if (cooldown.Samples.Count > MaximumSamplesForEstimate)
+        {
+            cooldown.Samples.RemoveAt(0);
+        }
+
         if (cooldown.Samples.Count < MinimumSamplesForEstimate ||
+            (cooldown.Samples[^1].QpcTimestamp - cooldown.Samples[0].QpcTimestamp) / (double)_qpcFrequency < MinimumEstimateSpanSeconds ||
             !TryFit(cooldown.Samples, out var slopePerSecond, out var fittedVisibleWipeFraction))
         {
             return null;
         }
 
-        var remainingSeconds = Math.Max(0, (1 - fittedVisibleWipeFraction) / slopePerSecond);
+        var remainingSeconds = (1 - fittedVisibleWipeFraction) / slopePerSecond;
+        if (remainingSeconds <= 0 && visibleWipeFraction >= CompletionVisibleWipeMinimum)
+        {
+            _activeCooldowns.Remove(key);
+            return new SkillCooldownTimeEstimate(
+                sample.Kind,
+                sample.SkillId,
+                sample.QpcTimestamp,
+                SkillCooldownEstimateState.Completed,
+                TimeSpan.Zero,
+                GetConfidence(cooldown.Samples, slopePerSecond, fittedVisibleWipeFraction),
+                cooldown.Samples.Count);
+        }
+
+        remainingSeconds = Math.Max(MinimumNonZeroRemainingSeconds, remainingSeconds);
+
         return new SkillCooldownTimeEstimate(
             sample.Kind,
             sample.SkillId,

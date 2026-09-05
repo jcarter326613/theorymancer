@@ -107,6 +107,35 @@ public sealed class CooldownTimeFixtureTests
         }
     }
 
+    [Fact]
+    public void Detect_DistinguishesIconHighlightsFromLateCountdownGlyphs()
+    {
+        var fixture = LoadFixture();
+        var timeline = LoadTimeline();
+        var layout = CreateLayout(timeline);
+        var references = CreateReferences(fixture.ReferenceFixture, timeline);
+        var framesBySequence = timeline.Frames.ToDictionary(frame => frame.Sequence);
+        var detector = new SkillCooldownDetector();
+
+        var beforeWeapon3Cooldown = LoadFrame(
+            Path.Combine(FixtureDirectory, framesBySequence[23].File),
+            framesBySequence[23].QpcTimestamp);
+        var beforeWeapon3 = Assert.Single(
+            detector.Detect(beforeWeapon3Cooldown, layout, references).Observations,
+            observation => observation.Kind == SkillBarComponentKind.WeaponSkill3);
+        Assert.Equal(SkillCooldownState.Available, beforeWeapon3.State);
+        Assert.Null(beforeWeapon3.VisibleWipeFraction);
+
+        var lateWeapon2Cooldown = LoadFrame(
+            Path.Combine(FixtureDirectory, framesBySequence[40].File),
+            framesBySequence[40].QpcTimestamp);
+        var lateWeapon2 = Assert.Single(
+            detector.Detect(lateWeapon2Cooldown, layout, references).Observations,
+            observation => observation.Kind == SkillBarComponentKind.WeaponSkill2);
+        Assert.Equal(SkillCooldownState.OnCooldown, lateWeapon2.State);
+        Assert.NotNull(lateWeapon2.VisibleWipeFraction);
+    }
+
     private static string FixtureDirectory => Path.Combine(
         AppContext.BaseDirectory,
         "Fixtures",
