@@ -15,44 +15,51 @@ public sealed class CooldownTimeFixtureTests
         var timeline = LoadTimeline();
         var framesBySequence = timeline.Frames.ToDictionary(frame => frame.Sequence);
         var layout = CreateLayout(timeline);
-        var references = CreateReferences(fixture.ReferenceFixture);
+        var references = CreateReferences(fixture.ReferenceFixture, timeline);
         var detector = new SkillCooldownDetector();
         var estimator = new SkillCooldownTimeEstimator(timeline.QpcFrequency);
         var latestEstimates = new Dictionary<SkillBarComponentKind, SkillCooldownTimeEstimate>();
         var observationHistory = new List<string>();
-        var selectedSequences = fixture.Cooldowns
-            .SelectMany(cooldown => cooldown.SampleSequences)
-            .Distinct()
-            .Order()
-            .ToList();
 
-        foreach (var sequence in selectedSequences)
+        foreach (var frameInfo in timeline.Frames)
         {
-            var frameInfo = framesBySequence[sequence];
             var frame = LoadFrame(Path.Combine(FixtureDirectory, frameInfo.File), frameInfo.QpcTimestamp);
             var detection = detector.Detect(frame, layout, references);
-            foreach (var cooldown in fixture.Cooldowns.Where(cooldown => cooldown.SampleSequences.Contains(sequence)))
+            foreach (var cooldown in fixture.Cooldowns)
             {
                 var observation = Assert.Single(detection.Observations, candidate => candidate.Kind == cooldown.ComponentKind);
                 observationHistory.Add(
-                    $"{sequence}:{cooldown.ComponentKind}:{observation.State}:{observation.VisibleWipeFraction?.ToString("F3") ?? "none"}");
-                var isCompletion = sequence == cooldown.FirstAvailableSequence;
-                if (sequence == cooldown.FirstCooldownSequence)
-                {
-                    Assert.Equal(SkillCooldownState.OnCooldown, observation.State);
-                }
-
-                if (isCompletion)
-                {
-                    Assert.Equal(SkillCooldownState.Available, observation.State);
-                    Assert.Null(observation.VisibleWipeFraction);
-                }
-                else
+                    $"{frameInfo.Sequence}:{cooldown.ComponentKind}:{observation.State}:{observation.VisibleWipeFraction?.ToString("F3") ?? "none"}");
+                var isExpectedCooldown = frameInfo.Sequence >= cooldown.FirstCooldownSequence &&
+                    frameInfo.Sequence < cooldown.FirstAvailableSequence;
+                var isCompletion = frameInfo.Sequence == cooldown.FirstAvailableSequence;
+                if (frameInfo.Sequence < cooldown.FirstCooldownSequence)
                 {
                     Assert.True(
+                        observation.State == SkillCooldownState.Available,
+                        $"Expected {cooldown.ComponentKind} to be ready before frame {cooldown.FirstCooldownSequence}, " +
+                        $"but detected {observation.State} at frame {frameInfo.Sequence}. " +
+                        $"Observed samples: {string.Join(", ", observationHistory)}.");
+                    Assert.Null(observation.VisibleWipeFraction);
+                }
+                else if (isExpectedCooldown)
+                {
+                    Assert.True(
+                        observation.State == SkillCooldownState.OnCooldown,
+                        $"Expected {cooldown.ComponentKind} to be cooling at frame {frameInfo.Sequence}, " +
+                        $"but detected {observation.State}. Observed samples: {string.Join(", ", observationHistory)}.");
+                    Assert.True(
                         observation.VisibleWipeFraction is not null,
-                        $"Expected a wipe measurement for {cooldown.ComponentKind} at frame {sequence}, " +
+                        $"Expected a wipe measurement for {cooldown.ComponentKind} at frame {frameInfo.Sequence}, " +
                         $"but detected {observation.State}.");
+                }
+                else if (isCompletion)
+                {
+                    Assert.True(
+                        observation.State == SkillCooldownState.Available,
+                        $"Expected {cooldown.ComponentKind} to be ready at frame {frameInfo.Sequence}, " +
+                        $"but detected {observation.State}. Observed samples: {string.Join(", ", observationHistory)}.");
+                    Assert.Null(observation.VisibleWipeFraction);
                 }
 
                 var estimate = estimator.Observe(new SkillCooldownWipeSample(
@@ -77,11 +84,11 @@ public sealed class CooldownTimeFixtureTests
                     continue;
                 }
 
-                if (cooldown.TryGetCheckpoint(sequence, out var checkpoint))
+                if (cooldown.TryGetCheckpoint(frameInfo.Sequence, out var checkpoint))
                 {
                     Assert.True(
                         estimate is { State: SkillCooldownEstimateState.Tracking },
-                        $"Expected tracking estimate for {cooldown.ComponentKind} at frame {sequence}; " +
+                        $"Expected tracking estimate for {cooldown.ComponentKind} at frame {frameInfo.Sequence}; " +
                         $"detected {observation.State} with visible wipe {observation.VisibleWipeFraction?.ToString("F3") ?? "none"}. " +
                         $"Observed samples: {string.Join(", ", observationHistory)}.");
                     var tracking = estimate!;
@@ -92,7 +99,7 @@ public sealed class CooldownTimeFixtureTests
                     Assert.True(
                         errorMilliseconds <= checkpoint.MaximumErrorMilliseconds,
                         $"Expected remaining time within {checkpoint.MaximumErrorMilliseconds}ms for " +
-                        $"{cooldown.ComponentKind} at frame {sequence}, but error was {errorMilliseconds:F0}ms. " +
+                        $"{cooldown.ComponentKind} at frame {frameInfo.Sequence}, but error was {errorMilliseconds:F0}ms. " +
                         $"Observed samples: {string.Join(", ", observationHistory)}.");
                     latestEstimates[cooldown.ComponentKind] = tracking;
                 }
@@ -127,7 +134,9 @@ public sealed class CooldownTimeFixtureTests
                 1))
             .ToList());
 
-    private static IReadOnlyList<SkillCooldownReference> CreateReferences(string referenceFixture)
+    private static IReadOnlyList<SkillCooldownReference> CreateReferences(
+        string referenceFixture,
+        TimelineFixture timeline)
     {
         var reference = JsonSerializer.Deserialize<ReferenceFixture>(
             File.ReadAllText(Path.Combine(
@@ -138,17 +147,24 @@ public sealed class CooldownTimeFixtureTests
                 "expectations.json")),
             JsonOptions)
             ?? throw new InvalidOperationException($"Reference fixture is invalid: {referenceFixture}");
-        return reference.Slots.Select(slot => new SkillCooldownReference(
-            slot.ComponentKind,
-            slot.SkillId,
-            Path.Combine(
+        return reference.Slots.Select(slot =>
+        {
+            var layoutSlot = timeline.Slots.Single(candidate => candidate.ComponentKind == slot.ComponentKind);
+            var iconPath = Path.Combine(
                 AppContext.BaseDirectory,
                 "Fixtures",
                 "SkillBar",
                 referenceFixture,
                 "icons",
-                slot.IconFile)))
-            .ToList();
+                slot.IconFile);
+            var referenceAtCalibratedBounds = SkillCooldownDetector.ResolveReference(new SkillCooldownReference(
+                slot.ComponentKind,
+                slot.SkillId,
+                iconPath,
+                new ScreenBounds(layoutSlot.X, layoutSlot.Y, layoutSlot.Width, layoutSlot.Height)));
+            // Any runtime icon search or template load must fail after startup resolution.
+            return referenceAtCalibratedBounds with { IconPath = $"startup-resolved-{slot.SkillId}.png" };
+        }).ToList();
     }
 
     private static CapturedFrame LoadFrame(string path, long qpcTimestamp)
