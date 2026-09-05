@@ -50,6 +50,36 @@ public sealed class CollectorSettingsStoreTests
     }
 
     [Fact]
+    public void SaveAndLoad_PersistsRememberedCharacterAndCalibrationTogether()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");
+        try
+        {
+            var layout = new SkillBarLayout(Enum.GetValues<SkillBarComponentKind>()
+                .Select(kind => new SkillBarComponent(kind, 0.1, 0.2, 0.1, 0.1, 0.9)).ToList());
+            var settings = new CollectorSettings(
+                [new CalibratedRegion("interface-map", "Map", new NormalizedCrop(0, 0, 0.2, 0.2))],
+                ArenaNetCharacterName: "Rytlock Brimstone")
+                .WithCalibration(
+                    new NormalizedCrop(0.1, 0.2, 0.3, 0.4),
+                    new NormalizedCrop(0.2, 0.7, 0.6, 0.2),
+                    layout);
+            var store = new CollectorSettingsStore(path);
+
+            store.Save(settings);
+
+            var restored = store.Load();
+            Assert.Equal("Rytlock Brimstone", restored.ArenaNetCharacterName);
+            Assert.Equal(settings.Regions, restored.Regions);
+            Assert.Equal(layout.Components, restored.SkillBarLayout?.Components);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Load_MigratesTheLegacyCropAndIgnoresObsoleteRowHeight()
     {
         var path = Path.Combine(Path.GetTempPath(), $"theorymancer-{Guid.NewGuid():N}.json");
