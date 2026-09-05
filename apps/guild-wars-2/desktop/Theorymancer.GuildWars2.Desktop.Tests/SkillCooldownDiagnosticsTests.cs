@@ -5,6 +5,43 @@ namespace Theorymancer.GuildWars2.Desktop.Tests;
 public sealed class SkillCooldownDiagnosticsTests
 {
     [Fact]
+    public void IdentityLock_KeepsTheFirstRecognizedSkillForEachSlot()
+    {
+        var lockState = new SkillCooldownIdentityLock();
+        var firstSetSkill = new SkillCooldownCandidate(
+            SkillBarComponentKind.WeaponSkill2,
+            10532,
+            "Grasping Dead",
+            "scepter.png",
+            WeaponSet: 1);
+        var secondSetSkill = new SkillCooldownCandidate(
+            SkillBarComponentKind.WeaponSkill2,
+            30163,
+            "Gravedigger",
+            "greatsword.png",
+            WeaponSet: 2);
+        var secondSetFourthSkill = new SkillCooldownCandidate(
+            SkillBarComponentKind.WeaponSkill4,
+            29855,
+            "Nightfall",
+            "greatsword.png",
+            WeaponSet: 2);
+        var firstSetThirdSkill = new SkillCooldownCandidate(
+            SkillBarComponentKind.WeaponSkill3,
+            10709,
+            "Feast of Corruption",
+            "scepter.png",
+            WeaponSet: 1);
+
+        Assert.True(lockState.TryLock(firstSetSkill));
+        Assert.False(lockState.TryLock(secondSetSkill));
+        Assert.False(lockState.TryLock(secondSetFourthSkill));
+        Assert.True(lockState.TryLock(firstSetThirdSkill));
+        Assert.Equal(1, lockState.WeaponSet);
+        Assert.Same(firstSetSkill, lockState.Candidates[SkillBarComponentKind.WeaponSkill2]);
+    }
+
+    [Fact]
     public void CreateSnapshot_ListsWeaponSetsThenNonWeaponSkillsWithSectionBreaks()
     {
         var candidates = new[]
