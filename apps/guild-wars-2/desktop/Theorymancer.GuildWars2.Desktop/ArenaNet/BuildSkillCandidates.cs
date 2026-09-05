@@ -70,12 +70,8 @@ public static class BuildSkillCandidateResolver
         var itemTypes = items
             .Where(item => !string.IsNullOrWhiteSpace(item.Details?.Type))
             .ToDictionary(item => item.Id, item => item.Details!.Type!, EqualityComparer<int>.Default);
-        var selectedSpecializations = build.Specializations
-            .Where(specialization => specialization?.Id is not null)
-            .Select(specialization => specialization!.Id!.Value)
-            .ToHashSet();
-        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponA", 1, selectedSpecializations, profession);
-        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponB", 2, selectedSpecializations, profession);
+        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponA", 1, profession);
+        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponB", 2, profession);
 
         return new BuildSkillCandidates(
             characterName,
@@ -94,7 +90,6 @@ public static class BuildSkillCandidateResolver
         IReadOnlyDictionary<int, string> itemTypes,
         string set,
         int setNumber,
-        IReadOnlySet<int> selectedSpecializations,
         ArenaNetProfession profession)
     {
         var mainhand = GetWeaponType(equipment, itemTypes, $"{set}1");
@@ -110,8 +105,7 @@ public static class BuildSkillCandidateResolver
             .ToHashSet(StringComparer.Ordinal);
         foreach (var (weaponType, weapon) in profession.Weapons)
         {
-            if (!equippedWeaponTypes.Contains(weaponType) ||
-                weapon.Specialization is { } specialization && !selectedSpecializations.Contains(specialization))
+            if (!equippedWeaponTypes.Contains(weaponType))
             {
                 continue;
             }

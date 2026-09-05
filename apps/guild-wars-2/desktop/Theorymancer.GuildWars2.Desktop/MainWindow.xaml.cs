@@ -31,12 +31,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
     private bool _diagnosticRecordingEnabled;
+    private bool _updatingArenaNetCharacters;
     private BuildSkillCandidates? _loadedBuildCandidates;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
     private string _authenticationStatus = "Signed out";
     private string _arenaNetStatus = "Connect an ArenaNet API key to select a character and load its active build.";
     private string _cooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
+    private string? _selectedArenaNetCharacter;
 
     public MainWindow(
         DesktopAuthenticationService authentication,
@@ -66,6 +68,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<SkillCooldownDiagnosticsRow> CooldownRows { get; } = [];
 
     public ObservableCollection<string> ArenaNetCharacters { get; } = [];
+
+    public bool CanSignIn => _authentication.State == AuthenticationState.SignedOut;
+
+    public bool CanSignOut => _authentication.State == AuthenticationState.SignedIn;
+
+    public string? SelectedArenaNetCharacter
+    {
+        get => _selectedArenaNetCharacter;
+        set
+        {
+            if (string.Equals(_selectedArenaNetCharacter, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _selectedArenaNetCharacter = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArenaNetCharacter)));
+            if (_updatingArenaNetCharacters)
+            {
+                return;
+            }
+
+            _loadedBuildCandidates = null;
+            _settings = _settings with { ArenaNetCharacterName = value };
+            _settingsStore.Save(_settings);
+            ArenaNetStatus = value is null
+                ? "Select a character to load its active build."
+                : $"{value} selected. Load its active build before calibrating.";
+        }
+    }
 
     public string SetupStatus
     {
@@ -97,7 +129,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => SetField(ref _cooldownMonitoringStatus, value);
     }
 
-    private async void SignIn_Click(object sender, RoutedEventArgs e)
+    public async Task SignInAsync()
     {
         try
         {
@@ -112,7 +144,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void SignOut_Click(object sender, RoutedEventArgs e)
+    public async Task SignOutAsync()
     {
         try
         {
@@ -134,6 +166,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _selectedWindow = picker.SelectedWindow;
         SetupStatus = $"Selected {_selectedWindow.Title}. Calibrate the required interface regions.";
+    }
+
+    private void SelectCharacter_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new CharacterSelectionDialog(this) { Owner = this };
+        _ = dialog.ShowDialog();
     }
 
     private void Calibrate_Click(object sender, RoutedEventArgs e)
@@ -171,9 +209,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void ConnectArenaNet_Click(object sender, RoutedEventArgs e)
+    public async Task<bool> ConnectArenaNetAsync(string enteredApiKey)
     {
-        var apiKey = ArenaNetApiKeyBox.Password;
+        var apiKey = enteredApiKey;
         var saveApiKey = !string.IsNullOrWhiteSpace(apiKey);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -183,47 +221,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             ShowSetupError("Enter an ArenaNet API key before connecting.");
-            return;
+            return false;
         }
 
         try
         {
             await LoadArenaNetAccountAsync(apiKey, saveApiKey);
-            ArenaNetApiKeyBox.Password = string.Empty;
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ArenaNetStatus = "ArenaNet API key could not be connected.";
             ShowSetupError($"ArenaNet connection failed: {exception.Message}");
+            return false;
         }
     }
 
-    private void ClearArenaNetKey_Click(object sender, RoutedEventArgs e)
+    public void ClearArenaNetKey()
     {
         _arenaNetApiKeyStore.Delete();
-        ArenaNetApiKeyBox.Password = string.Empty;
         ArenaNetCharacters.Clear();
-        ArenaNetCharacterComboBox.SelectedItem = null;
+        SelectedArenaNetCharacter = null;
         _loadedBuildCandidates = null;
-        _settings = _settings with { ArenaNetCharacterName = null };
-        _settingsStore.Save(_settings);
         ArenaNetStatus = "ArenaNet API key removed from this PC.";
     }
 
-    private void ArenaNetCharacter_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
-        {
-            return;
-        }
-
-        _loadedBuildCandidates = null;
-        _settings = _settings with { ArenaNetCharacterName = characterName };
-        _settingsStore.Save(_settings);
-        ArenaNetStatus = $"{characterName} selected. Load its active build before calibrating.";
-    }
-
-    private async void LoadArenaNetBuild_Click(object sender, RoutedEventArgs e)
+    public async Task LoadSelectedArenaNetBuildAsync()
     {
         var apiKey = _arenaNetApiKeyStore.Load();
         if (apiKey is null)
@@ -232,7 +255,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
+        if (SelectedArenaNetCharacter is not string characterName)
         {
             ShowSetupError("Select an ArenaNet character before loading a build.");
             return;
@@ -291,19 +314,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _arenaNetApiKeyStore.Save(apiKey);
         }
 
-        ArenaNetCharacters.Clear();
-        foreach (var character in account.Characters)
+        _updatingArenaNetCharacters = true;
+        try
         {
-            ArenaNetCharacters.Add(character);
+            ArenaNetCharacters.Clear();
+            foreach (var character in account.Characters)
+            {
+                ArenaNetCharacters.Add(character);
+            }
+
+            SelectedArenaNetCharacter = account.SelectedCharacterName;
+        }
+        finally
+        {
+            _updatingArenaNetCharacters = false;
         }
 
-        if (_settings.ArenaNetCharacterName is not null && account.SelectedCharacterName is null)
+        if (!string.Equals(_settings.ArenaNetCharacterName, SelectedArenaNetCharacter, StringComparison.Ordinal))
         {
-            _settings = _settings with { ArenaNetCharacterName = null };
+            _settings = _settings with { ArenaNetCharacterName = SelectedArenaNetCharacter };
             _settingsStore.Save(_settings);
         }
 
-        ArenaNetCharacterComboBox.SelectedItem = account.SelectedCharacterName;
         if (account.SelectedCharacterName is null)
         {
             ArenaNetStatus = account.Characters.Count == 0
@@ -454,8 +486,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AuthenticationState.SignedIn => "Signed in",
             _ => "Signed out",
         };
-        SignInButton.IsEnabled = _authentication.State == AuthenticationState.SignedOut;
-        SignOutButton.IsEnabled = _authentication.State == AuthenticationState.SignedIn;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSignIn)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSignOut)));
     }
 
     private async Task StopCaptureAsync()

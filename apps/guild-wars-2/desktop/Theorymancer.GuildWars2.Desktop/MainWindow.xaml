@@ -23,34 +23,12 @@
       <TextBlock Margin="0,6,0,0" Foreground="DimGray" TextWrapping="Wrap">
         Captures the visible combat-log region. Calibrate both the combat log and skill bar before recording.
       </TextBlock>
-        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Theorymancer account:" />
-        <TextBlock Margin="8,0,12,0" VerticalAlignment="Center" Text="{Binding AuthenticationStatus}" />
-        <Button x:Name="SignInButton" Padding="10,4" Click="SignIn_Click" Content="Sign in" />
-          <Button x:Name="SignOutButton" Margin="8,0,0,0" Padding="10,4" Click="SignOut_Click" Content="Sign out" />
-        </StackPanel>
-        <Border Margin="0,12,0,0" Padding="10" BorderBrush="Gainsboro" BorderThickness="1">
-          <StackPanel>
-            <TextBlock FontWeight="SemiBold" Text="ArenaNet build" />
-            <TextBlock Margin="0,3,0,0" Foreground="DimGray" FontSize="12" TextWrapping="Wrap"
-                       Text="Enter an API key with account, characters, and builds permissions. It is encrypted for this Windows user and is sent only to api.guildwars2.com." />
-            <WrapPanel Margin="0,8,0,0">
-              <PasswordBox x:Name="ArenaNetApiKeyBox" Width="300" Padding="7,4" VerticalContentAlignment="Center" />
-              <Button Margin="8,0,0,0" Padding="10,4" Click="ConnectArenaNet_Click" Content="Connect key" />
-              <Button Margin="8,0,0,0" Padding="10,4" Click="ClearArenaNetKey_Click" Content="Forget key" />
-            </WrapPanel>
-            <WrapPanel Margin="0,8,0,0">
-              <TextBlock VerticalAlignment="Center" Text="Character:" />
-              <ComboBox x:Name="ArenaNetCharacterComboBox" Width="220" Margin="8,0,0,0" ItemsSource="{Binding ArenaNetCharacters}" SelectionChanged="ArenaNetCharacter_Changed" />
-              <Button Margin="8,0,0,0" Padding="10,4" Click="LoadArenaNetBuild_Click" Content="Load active build" />
-            </WrapPanel>
-            <TextBlock Margin="0,6,0,0" Foreground="DimGray" FontSize="12" Text="{Binding ArenaNetStatus}" TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
-      </StackPanel>
+    </StackPanel>
 
     <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="12" />
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="12" />
         <ColumnDefinition Width="Auto" />
@@ -59,7 +37,11 @@
       </Grid.ColumnDefinitions>
       <Button Grid.Column="0" Padding="12,6" Click="SelectWindow_Click" Content="Select GW2 window" />
       <Button Grid.Column="2" Padding="12,6" Click="Calibrate_Click" Content="Calibrate interface" />
-      <TextBlock Grid.Column="4" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
+      <Button Grid.Column="4" Padding="12,6" Click="SelectCharacter_Click" Content="Select Character" />
+      <StackPanel Grid.Column="6" VerticalAlignment="Center">
+        <TextBlock TextWrapping="Wrap" Text="{Binding ArenaNetStatus}" />
+        <TextBlock Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="{Binding SetupStatus}" />
+      </StackPanel>
     </Grid>
 
     <Grid Grid.Row="4">
@@ -120,9 +102,6 @@
                 </StackPanel>
               </Border>
               <TextBlock x:Name="DiagnosticsSummaryText" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
-              <Button x:Name="RunDiagnosticOcrButton" Margin="0,12,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
-              <Button x:Name="ToggleDiagnosticRecordingButton" Margin="0,8,0,0" Padding="10,5" HorizontalAlignment="Left" Click="ToggleDiagnosticRecording_Click" Content="Start diagnostic recording" IsEnabled="False" />
-              <TextBlock x:Name="DiagnosticRecordingStatusText" Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Diagnostic files are not being recorded." />
               <Separator Margin="0,16,0,12" />
               <TextBlock FontWeight="SemiBold" Text="Cooldown fixture capture" />
               <TextBlock Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="After a 3-second delay, records the full skill bar as JPEG frames at 4 FPS. Stop after every tracked skill is available." />
@@ -131,6 +110,11 @@
                 <Button x:Name="StopFixtureCaptureButton" Margin="8,0,0,0" Padding="10,5" Click="StopFixtureCapture_Click" Content="Stop" IsEnabled="False" />
               </WrapPanel>
               <TextBlock x:Name="FixtureCaptureStatusText" Margin="0,6,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" />
+              <Separator Margin="0,16,0,12" />
+              <TextBlock FontWeight="SemiBold" Text="Combat-log diagnostics" />
+              <Button x:Name="RunDiagnosticOcrButton" Margin="0,8,0,0" Padding="10,5" HorizontalAlignment="Left" Click="RunDiagnosticOcr_Click" Content="Run diagnostic OCR" />
+              <Button x:Name="ToggleDiagnosticRecordingButton" Margin="0,8,0,0" Padding="10,5" HorizontalAlignment="Left" Click="ToggleDiagnosticRecording_Click" Content="Start diagnostic recording" IsEnabled="False" />
+              <TextBlock x:Name="DiagnosticRecordingStatusText" Margin="0,4,0,0" Foreground="DimGray" FontSize="11" TextWrapping="Wrap" Text="Diagnostic files are not being recorded." />
               <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Original crop" />
               <Border BorderBrush="Gainsboro" BorderThickness="1">
                 <Image x:Name="OriginalDiagnosticPreview" Stretch="Uniform" />
