@@ -4,14 +4,14 @@ import { readFile } from "node:fs/promises"
 import type { AddressInfo } from "node:net"
 import type { Server } from "node:http"
 
-import { createApp, parseManifest } from "./app.js"
-import type { ObjectStore } from "./app.js"
-import { AuthenticationRejectedError } from "./auth.js"
-import type { Authenticator } from "./auth.js"
+import { createApp, parseManifest } from "../src/app.js"
+import type { ObjectStore } from "../src/app.js"
+import { AuthenticationRejectedError } from "../src/auth.js"
+import type { Authenticator } from "../src/auth.js"
 import type {
     AuthFailureReport,
     AuthFailureReporter,
-} from "./auth-failure-reporter.js"
+} from "../src/auth-failure-reporter.js"
 
 const iconAssetId = "a784986f-696d-4c63-8f46-4cc53efc9b47"
 const manifestPath = "guild-wars-2/icons.manifest.json"

@@ -11,7 +11,7 @@ import {
     SignJWT,
 } from "jose"
 
-import { TheorymancerAuthenticator } from "./auth.js"
+import { TheorymancerAuthenticator } from "../src/auth.js"
 
 const issuer = "https://auth.theorymancer.test"
 const audience = "guild-wars-2-api"

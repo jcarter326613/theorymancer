@@ -3,7 +3,7 @@ import { test } from "node:test"
 
 import type { Request } from "express"
 
-import { clientIp, normalizeIp } from "./security.js"
+import { clientIp, normalizeIp } from "../src/security.js"
 
 void test("normalizes supported IPv4 and IPv6 client addresses", () => {
     assert.equal(normalizeIp(" 192.168.001.010 "), undefined)

@@ -6,7 +6,7 @@ import { afterEach, test } from "node:test"
 import { exportJWK, generateKeyPair, SignJWT } from "jose"
 import type { JWK } from "jose"
 
-import { createApp } from "./app.js"
+import { createApp } from "../src/app.js"
 import type {
     AccessTokenClaims,
     Account,
@@ -20,8 +20,8 @@ import type {
     RefreshRotationResult,
     RefreshTokenRecord,
     TokenIssuer,
-} from "./auth-types.js"
-import { hashSecret } from "./security.js"
+} from "../src/auth-types.js"
+import { hashSecret } from "../src/security.js"
 
 const now = 1_800_000_000_000
 const issuer = "https://auth.example.test"
