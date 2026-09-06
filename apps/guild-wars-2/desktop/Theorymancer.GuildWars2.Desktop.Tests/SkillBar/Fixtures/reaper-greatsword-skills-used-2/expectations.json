@@ -1,0 +1,16 @@
+{
+  "screenshot": "screenshot.jpg",
+  "referenceFixture": "reaper-greatsword",
+  "slots": [
+    { "kind": "WeaponSkill1", "x": 79, "y": 155, "width": 80, "height": 80, "state": "Available" },
+    { "kind": "WeaponSkill2", "x": 163, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "WeaponSkill3", "x": 246, "y": 155, "width": 80, "height": 80, "state": "Available" },
+    { "kind": "WeaponSkill4", "x": 327, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "WeaponSkill5", "x": 411, "y": 155, "width": 80, "height": 80, "state": "Available" },
+    { "kind": "HealSkill", "x": 641, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "UtilitySkill1", "x": 724, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "UtilitySkill2", "x": 807, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "UtilitySkill3", "x": 889, "y": 155, "width": 80, "height": 80, "state": "OnCooldown" },
+    { "kind": "EliteSkill", "x": 972, "y": 155, "width": 80, "height": 80, "state": "Available" }
+  ]
+}

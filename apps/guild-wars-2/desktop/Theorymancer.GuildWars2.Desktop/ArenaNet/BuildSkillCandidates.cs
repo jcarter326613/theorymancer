@@ -6,10 +6,14 @@ public sealed record BuildSkillCandidates(
     string CharacterName,
     string BuildName,
     string Profession,
-    IReadOnlyDictionary<SkillBarComponentKind, IReadOnlyList<int>> SkillIdsBySlot)
+    IReadOnlyDictionary<SkillBarComponentKind, IReadOnlyList<int>> SkillIdsBySlot,
+    IReadOnlyDictionary<(SkillBarComponentKind Kind, int SkillId), int>? WeaponSetBySlot = null)
 {
     public IReadOnlyList<int> GetSkillIds(SkillBarComponentKind kind) =>
         SkillIdsBySlot.TryGetValue(kind, out var skillIds) ? skillIds : [];
+
+    public int? GetWeaponSet(SkillBarComponentKind kind, int skillId) =>
+        WeaponSetBySlot?.GetValueOrDefault((kind, skillId));
 }
 
 public sealed class ArenaNetBuildLoader
@@ -56,6 +60,7 @@ public static class BuildSkillCandidateResolver
         ArenaNetProfession profession)
     {
         var candidates = new Dictionary<SkillBarComponentKind, HashSet<int>>();
+        var weaponSets = new Dictionary<(SkillBarComponentKind Kind, int SkillId), int>();
         Add(candidates, SkillBarComponentKind.HealSkill, build.Skills.Heal);
         Add(candidates, SkillBarComponentKind.UtilitySkill1, build.Skills.Utilities.ElementAtOrDefault(0));
         Add(candidates, SkillBarComponentKind.UtilitySkill2, build.Skills.Utilities.ElementAtOrDefault(1));
@@ -65,12 +70,8 @@ public static class BuildSkillCandidateResolver
         var itemTypes = items
             .Where(item => !string.IsNullOrWhiteSpace(item.Details?.Type))
             .ToDictionary(item => item.Id, item => item.Details!.Type!, EqualityComparer<int>.Default);
-        var selectedSpecializations = build.Specializations
-            .Where(specialization => specialization?.Id is not null)
-            .Select(specialization => specialization!.Id!.Value)
-            .ToHashSet();
-        AddWeaponSetCandidates(candidates, equipmentTab.Equipment, itemTypes, "WeaponA", selectedSpecializations, profession);
-        AddWeaponSetCandidates(candidates, equipmentTab.Equipment, itemTypes, "WeaponB", selectedSpecializations, profession);
+        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponA", 1, profession);
+        AddWeaponSetCandidates(candidates, weaponSets, equipmentTab.Equipment, itemTypes, "WeaponB", 2, profession);
 
         return new BuildSkillCandidates(
             characterName,
@@ -78,15 +79,17 @@ public static class BuildSkillCandidateResolver
             build.Profession,
             candidates.ToDictionary(
                 pair => pair.Key,
-                pair => (IReadOnlyList<int>)pair.Value.Order().ToList()));
+                pair => (IReadOnlyList<int>)pair.Value.Order().ToList()),
+            weaponSets);
     }
 
     private static void AddWeaponSetCandidates(
         IDictionary<SkillBarComponentKind, HashSet<int>> candidates,
+        IDictionary<(SkillBarComponentKind Kind, int SkillId), int> weaponSets,
         IReadOnlyList<ArenaNetEquipment> equipment,
         IReadOnlyDictionary<int, string> itemTypes,
         string set,
-        IReadOnlySet<int> selectedSpecializations,
+        int setNumber,
         ArenaNetProfession profession)
     {
         var mainhand = GetWeaponType(equipment, itemTypes, $"{set}1");
@@ -102,8 +105,7 @@ public static class BuildSkillCandidateResolver
             .ToHashSet(StringComparer.Ordinal);
         foreach (var (weaponType, weapon) in profession.Weapons)
         {
-            if (!equippedWeaponTypes.Contains(weaponType) ||
-                weapon.Specialization is { } specialization && !selectedSpecializations.Contains(specialization))
+            if (!equippedWeaponTypes.Contains(weaponType))
             {
                 continue;
             }
@@ -117,6 +119,7 @@ public static class BuildSkillCandidateResolver
                 }
 
                 Add(candidates, slot, skill.Id);
+                weaponSets[(slot, skill.Id)] = setNumber;
             }
         }
     }

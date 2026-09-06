@@ -26,13 +26,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CollectorSettings _settings;
     private SelectedGameWindow? _selectedWindow;
     private CombatLogCaptureSession? _captureSession;
+    private SkillBarFixtureCaptureSession? _fixtureCaptureSession;
+    private SkillCooldownMonitor? _cooldownMonitor;
     private CombatLogActivityLogDebugWriter? _activityLogDebugWriter;
     private bool _diagnosticsEnabled;
+    private bool _diagnosticRecordingEnabled;
+    private bool _updatingArenaNetCharacters;
     private BuildSkillCandidates? _loadedBuildCandidates;
     private string _setupStatus = "Select the Guild Wars 2 window, then calibrate the combat log and skill bar.";
     private string _captureStatus = "Not recording";
     private string _authenticationStatus = "Signed out";
     private string _arenaNetStatus = "Connect an ArenaNet API key to select a character and load its active build.";
+    private string _cooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
+    private string? _selectedArenaNetCharacter;
 
     public MainWindow(
         DesktopAuthenticationService authentication,
@@ -59,7 +65,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public ObservableCollection<string> ActivityLog { get; } = [];
 
+    public ObservableCollection<SkillCooldownDiagnosticsRow> CooldownRows { get; } = [];
+
     public ObservableCollection<string> ArenaNetCharacters { get; } = [];
+
+    public bool CanSignIn => _authentication.State == AuthenticationState.SignedOut;
+
+    public bool CanSignOut => _authentication.State == AuthenticationState.SignedIn;
+
+    public string? SelectedArenaNetCharacter
+    {
+        get => _selectedArenaNetCharacter;
+        set
+        {
+            if (string.Equals(_selectedArenaNetCharacter, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _selectedArenaNetCharacter = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArenaNetCharacter)));
+            if (_updatingArenaNetCharacters)
+            {
+                return;
+            }
+
+            _loadedBuildCandidates = null;
+            _settings = _settings with { ArenaNetCharacterName = value };
+            _settingsStore.Save(_settings);
+            ArenaNetStatus = value is null
+                ? "Select a character to load its active build."
+                : $"{value} selected. Load its active build before calibrating.";
+        }
+    }
 
     public string SetupStatus
     {
@@ -85,7 +123,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => SetField(ref _arenaNetStatus, value);
     }
 
-    private async void SignIn_Click(object sender, RoutedEventArgs e)
+    public string CooldownMonitoringStatus
+    {
+        get => _cooldownMonitoringStatus;
+        private set => SetField(ref _cooldownMonitoringStatus, value);
+    }
+
+    public async Task SignInAsync()
     {
         try
         {
@@ -100,7 +144,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void SignOut_Click(object sender, RoutedEventArgs e)
+    public async Task SignOutAsync()
     {
         try
         {
@@ -122,6 +166,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _selectedWindow = picker.SelectedWindow;
         SetupStatus = $"Selected {_selectedWindow.Title}. Calibrate the required interface regions.";
+    }
+
+    private void SelectCharacter_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new CharacterSelectionDialog(this) { Owner = this };
+        _ = dialog.ShowDialog();
     }
 
     private void Calibrate_Click(object sender, RoutedEventArgs e)
@@ -159,9 +209,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void ConnectArenaNet_Click(object sender, RoutedEventArgs e)
+    public async Task<bool> ConnectArenaNetAsync(string enteredApiKey)
     {
-        var apiKey = ArenaNetApiKeyBox.Password;
+        var apiKey = enteredApiKey;
         var saveApiKey = !string.IsNullOrWhiteSpace(apiKey);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -171,47 +221,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             ShowSetupError("Enter an ArenaNet API key before connecting.");
-            return;
+            return false;
         }
 
         try
         {
             await LoadArenaNetAccountAsync(apiKey, saveApiKey);
-            ArenaNetApiKeyBox.Password = string.Empty;
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ArenaNetStatus = "ArenaNet API key could not be connected.";
             ShowSetupError($"ArenaNet connection failed: {exception.Message}");
+            return false;
         }
     }
 
-    private void ClearArenaNetKey_Click(object sender, RoutedEventArgs e)
+    public void ClearArenaNetKey()
     {
         _arenaNetApiKeyStore.Delete();
-        ArenaNetApiKeyBox.Password = string.Empty;
         ArenaNetCharacters.Clear();
-        ArenaNetCharacterComboBox.SelectedItem = null;
+        SelectedArenaNetCharacter = null;
         _loadedBuildCandidates = null;
-        _settings = _settings with { ArenaNetCharacterName = null };
-        _settingsStore.Save(_settings);
         ArenaNetStatus = "ArenaNet API key removed from this PC.";
     }
 
-    private void ArenaNetCharacter_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
-        {
-            return;
-        }
-
-        _loadedBuildCandidates = null;
-        _settings = _settings with { ArenaNetCharacterName = characterName };
-        _settingsStore.Save(_settings);
-        ArenaNetStatus = $"{characterName} selected. Load its active build before calibrating.";
-    }
-
-    private async void LoadArenaNetBuild_Click(object sender, RoutedEventArgs e)
+    public async Task LoadSelectedArenaNetBuildAsync()
     {
         var apiKey = _arenaNetApiKeyStore.Load();
         if (apiKey is null)
@@ -220,7 +255,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (ArenaNetCharacterComboBox.SelectedItem is not string characterName)
+        if (SelectedArenaNetCharacter is not string characterName)
         {
             ShowSetupError("Select an ArenaNet character before loading a build.");
             return;
@@ -279,19 +314,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _arenaNetApiKeyStore.Save(apiKey);
         }
 
-        ArenaNetCharacters.Clear();
-        foreach (var character in account.Characters)
+        _updatingArenaNetCharacters = true;
+        try
         {
-            ArenaNetCharacters.Add(character);
+            ArenaNetCharacters.Clear();
+            foreach (var character in account.Characters)
+            {
+                ArenaNetCharacters.Add(character);
+            }
+
+            SelectedArenaNetCharacter = account.SelectedCharacterName;
+        }
+        finally
+        {
+            _updatingArenaNetCharacters = false;
         }
 
-        if (_settings.ArenaNetCharacterName is not null && account.SelectedCharacterName is null)
+        if (!string.Equals(_settings.ArenaNetCharacterName, SelectedArenaNetCharacter, StringComparison.Ordinal))
         {
-            _settings = _settings with { ArenaNetCharacterName = null };
+            _settings = _settings with { ArenaNetCharacterName = SelectedArenaNetCharacter };
             _settingsStore.Save(_settings);
         }
 
-        ArenaNetCharacterComboBox.SelectedItem = account.SelectedCharacterName;
         if (account.SelectedCharacterName is null)
         {
             ArenaNetStatus = account.Characters.Count == 0
@@ -313,6 +357,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
+        if (_fixtureCaptureSession is not null)
+        {
+            ShowSetupError("Stop the cooldown fixture capture before starting normal recording.");
+            return;
+        }
+
         if (_selectedWindow is null ||
             _settings.CombatLogCrop is null ||
             _settings.SkillBarCrop is null ||
@@ -340,22 +390,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _captureSession.StatusChanged += CombatLogCaptureSession_StatusChanged;
             _captureSession.LineRecognized += CombatLogCaptureSession_LineRecognized;
             _captureSession.DiagnosticsUpdated += CombatLogCaptureSession_DiagnosticsUpdated;
-            if (_diagnosticsEnabled)
-            {
-                _activityLogDebugWriter = _captureSession.DebugActivityWriter;
-            }
-
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
+            UpdateDiagnosticRecordingControls();
             CaptureStatus = "Recording";
             AddActivity(
                 "Recording started. Press Stop capture before moving or minimizing Guild Wars 2.",
                 "capture_started");
+            await StartCooldownMonitoringAsync();
         }
         catch (Exception exception)
         {
             _captureSession?.Dispose();
             _captureSession = null;
+            UpdateDiagnosticRecordingControls();
             ShowSetupError(exception.Message);
         }
     }
@@ -365,9 +413,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await StopCaptureAsync();
     }
 
+    private void StartFixtureCapture_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fixtureCaptureSession is not null)
+        {
+            return;
+        }
+
+        if (_captureSession is not null)
+        {
+            ShowSetupError("Stop normal recording before capturing a cooldown fixture.");
+            return;
+        }
+
+        if (_selectedWindow is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasSkillSlots: true })
+        {
+            ShowSetupError("Select the GW2 window and calibrate the skill-bar crop and layout before capturing a cooldown fixture.");
+            return;
+        }
+
+        if (!_selectedWindow.TryGetClientBounds(out _))
+        {
+            ShowSetupError("Guild Wars 2 is no longer available. Select its window again.");
+            return;
+        }
+
+        var session = SkillBarFixtureCaptureSession.Start(
+            _selectedWindow,
+            _settings.SkillBarCrop,
+            _settings.SkillBarLayout);
+        _fixtureCaptureSession = session;
+        session.StatusChanged += FixtureCaptureSession_StatusChanged;
+        session.Completed += result => FixtureCaptureSession_Completed(session, result);
+        StartFixtureCaptureButton.IsEnabled = false;
+        StopFixtureCaptureButton.IsEnabled = true;
+        RunDiagnosticOcrButton.IsEnabled = false;
+        StartButton.IsEnabled = false;
+        FixtureCaptureStatusText.Text = $"Preparing frames in {session.SessionDirectory}";
+        AddActivity("Cooldown fixture capture requested. Switch to Guild Wars 2 and use the first skill after the delay.", "fixture_capture_started");
+    }
+
+    private async void StopFixtureCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await StopFixtureCaptureAsync();
+    }
+
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         _authentication.StateChanged -= Authentication_StateChanged;
+        await StopFixtureCaptureAsync();
         await StopCaptureAsync();
     }
 
@@ -390,8 +486,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AuthenticationState.SignedIn => "Signed in",
             _ => "Signed out",
         };
-        SignInButton.IsEnabled = _authentication.State == AuthenticationState.SignedOut;
-        SignOutButton.IsEnabled = _authentication.State == AuthenticationState.SignedIn;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSignIn)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSignOut)));
     }
 
     private async Task StopCaptureAsync()
@@ -401,8 +497,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        SetDiagnosticRecordingEnabled(false);
         var captureSession = _captureSession;
         _captureSession = null;
+        UpdateDiagnosticRecordingControls();
+        await StopCooldownMonitoringAsync();
         await captureSession.DisposeAsync();
         StartButton.IsEnabled = true;
         StopButton.IsEnabled = false;
@@ -411,11 +510,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             $"Recording stopped. {FormatStatistics(captureSession.Statistics)}",
             "capture_stopped",
             captureSession.Statistics);
-        if (_activityLogDebugWriter is { } activityLogDebugWriter)
+        _activityLogDebugWriter = null;
+    }
+
+    private async Task StopFixtureCaptureAsync()
+    {
+        if (_fixtureCaptureSession is not { } fixtureCaptureSession)
         {
-            await activityLogDebugWriter.DisposeAsync();
-            _activityLogDebugWriter = null;
+            return;
         }
+
+        StopFixtureCaptureButton.IsEnabled = false;
+        FixtureCaptureStatusText.Text = "Stopping cooldown fixture capture...";
+        await fixtureCaptureSession.DisposeAsync();
     }
 
     private void CombatLogCaptureSession_StatusChanged(string message)
@@ -425,6 +532,133 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CaptureStatus = message;
             AddActivity(message, "capture_status");
         });
+    }
+
+    private void ToggleDiagnosticRecording_Click(object sender, RoutedEventArgs e)
+    {
+        if (_captureSession is null || !_diagnosticsEnabled)
+        {
+            return;
+        }
+
+        if (_diagnosticRecordingEnabled)
+        {
+            AddActivity("Diagnostic recording stopped.", "diagnostic_recording_stopped");
+            SetDiagnosticRecordingEnabled(false);
+            return;
+        }
+
+        SetDiagnosticRecordingEnabled(true);
+        AddActivity("Diagnostic recording started.", "diagnostic_recording_started");
+    }
+
+    private void SetDiagnosticRecordingEnabled(bool enabled)
+    {
+        _diagnosticRecordingEnabled = enabled && _diagnosticsEnabled && _captureSession is not null;
+        _captureSession?.SetDiagnosticRecordingEnabled(_diagnosticRecordingEnabled);
+        _activityLogDebugWriter = _diagnosticRecordingEnabled && _captureSession is not null
+            ? _captureSession.DebugActivityWriter
+            : null;
+        UpdateDiagnosticRecordingControls();
+    }
+
+    private void UpdateDiagnosticRecordingControls()
+    {
+        var canRecord = _diagnosticsEnabled && _captureSession is not null;
+        ToggleDiagnosticRecordingButton.IsEnabled = canRecord;
+        ToggleDiagnosticRecordingButton.Content = _diagnosticRecordingEnabled
+            ? "Stop diagnostic recording"
+            : "Start diagnostic recording";
+        DiagnosticRecordingStatusText.Text = _diagnosticRecordingEnabled
+            ? "Recording diagnostic OCR frames and activity events to disk."
+            : "Diagnostic files are not being recorded.";
+    }
+
+    private async Task StartCooldownMonitoringAsync()
+    {
+        if (!_diagnosticsEnabled || _captureSession is null || _cooldownMonitor is not null)
+        {
+            return;
+        }
+
+        if (_selectedWindow is null ||
+            _settings.SkillBarCrop is null ||
+            _settings.SkillBarLayout is not { HasSkillSlots: true } ||
+            _loadedBuildCandidates is null)
+        {
+            CooldownMonitoringStatus = "Load the active build to identify and measure skill cooldowns.";
+            return;
+        }
+
+        CooldownMonitoringStatus = "Loading skill references...";
+        try
+        {
+            var monitor = await SkillCooldownMonitor.StartAsync(
+                _selectedWindow,
+                _settings.SkillBarCrop,
+                _settings.SkillBarLayout,
+                _loadedBuildCandidates,
+                _referenceIcons,
+                _shutdownToken);
+            if (!_diagnosticsEnabled || _captureSession is null)
+            {
+                await monitor.DisposeAsync();
+                return;
+            }
+
+            _cooldownMonitor = monitor;
+            monitor.SnapshotUpdated += CooldownMonitor_SnapshotUpdated;
+            monitor.StatusChanged += CooldownMonitor_StatusChanged;
+            CooldownMonitoringStatus = "Matching the active skill bar...";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            CooldownMonitoringStatus = $"Cooldown monitoring unavailable: {exception.Message}";
+        }
+    }
+
+    private async Task StopCooldownMonitoringAsync()
+    {
+        if (_cooldownMonitor is not { } monitor)
+        {
+            return;
+        }
+
+        _cooldownMonitor = null;
+        monitor.SnapshotUpdated -= CooldownMonitor_SnapshotUpdated;
+        monitor.StatusChanged -= CooldownMonitor_StatusChanged;
+        await monitor.DisposeAsync();
+        CooldownRows.Clear();
+        if (_diagnosticsEnabled)
+        {
+            CooldownMonitoringStatus = "Cooldown monitoring stopped.";
+        }
+    }
+
+    private void CooldownMonitor_SnapshotUpdated(SkillCooldownDiagnosticsSnapshot snapshot)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_diagnosticsEnabled || _cooldownMonitor is null)
+            {
+                return;
+            }
+
+            CooldownRows.Clear();
+            foreach (var row in snapshot.Rows)
+            {
+                CooldownRows.Add(row);
+            }
+
+            CooldownMonitoringStatus = snapshot.Rows.Any(row => row.IsActive)
+                ? "Measured from the visible skill bar. Alternate candidates are inactive."
+                : "Waiting for a recognizable active skill bar.";
+        });
+    }
+
+    private void CooldownMonitor_StatusChanged(string message)
+    {
+        Dispatcher.BeginInvoke(() => CooldownMonitoringStatus = message);
     }
 
     private void CombatLogCaptureSession_LineRecognized(RecognizedCombatLogLine line)
@@ -454,6 +688,53 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ProcessedDiagnosticPreview.Source = diagnostics.ProcessedPreviewFrame is { } processed
                 ? ToBitmapSource(processed.Frame)
                 : null;
+        });
+    }
+
+    private void FixtureCaptureSession_StatusChanged(string message)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_fixtureCaptureSession is null)
+            {
+                return;
+            }
+
+            FixtureCaptureStatusText.Text = message;
+            AddActivity(message, "fixture_capture_status");
+        });
+    }
+
+    private void FixtureCaptureSession_Completed(
+        SkillBarFixtureCaptureSession session,
+        SkillBarFixtureCaptureResult result)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!ReferenceEquals(_fixtureCaptureSession, session))
+            {
+                return;
+            }
+
+            _fixtureCaptureSession = null;
+            StartFixtureCaptureButton.IsEnabled = _diagnosticsEnabled;
+            StopFixtureCaptureButton.IsEnabled = false;
+            RunDiagnosticOcrButton.IsEnabled = _diagnosticsEnabled;
+            StartButton.IsEnabled = _captureSession is null;
+            var reason = result.Error is not null
+                ? $"failed: {result.Error}"
+                : result.ReachedMaximumDuration
+                    ? "reached the 60-second limit"
+                    : result.WasCancelled
+                        ? "stopped"
+                        : "completed";
+            FixtureCaptureStatusText.Text =
+                $"{reason}. {result.FramesCaptured} frame(s): {result.SessionDirectory}";
+            AddActivity(
+                $"Cooldown fixture capture {reason}. {result.FramesCaptured} frame(s) saved to {result.SessionDirectory}.",
+                "fixture_capture_completed",
+                result);
+            _ = session.DisposeAsync();
         });
     }
 
@@ -500,22 +781,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void DiagnosticsCheckBox_Changed(object sender, RoutedEventArgs e)
+    private async void DiagnosticsCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         _diagnosticsEnabled = DiagnosticsCheckBox.IsChecked == true;
         DiagnosticsPanel.Visibility = _diagnosticsEnabled ? Visibility.Visible : Visibility.Collapsed;
         _captureSession?.SetDiagnosticsEnabled(_diagnosticsEnabled);
         if (_diagnosticsEnabled && _captureSession is not null)
         {
-            _activityLogDebugWriter = _captureSession.DebugActivityWriter;
+            await StartCooldownMonitoringAsync();
         }
 
         if (!_diagnosticsEnabled)
         {
+            SetDiagnosticRecordingEnabled(false);
+            await StopCooldownMonitoringAsync();
+            await StopFixtureCaptureAsync();
             DiagnosticsSummaryText.Text = string.Empty;
             OriginalDiagnosticPreview.Source = null;
             ProcessedDiagnosticPreview.Source = null;
+            FixtureCaptureStatusText.Text = string.Empty;
+            CooldownRows.Clear();
+            CooldownMonitoringStatus = "Start capture with diagnostics enabled to inspect cooldowns.";
         }
+
+        UpdateDiagnosticRecordingControls();
 
         AddActivity(
             _diagnosticsEnabled ? "Diagnostics enabled." : "Diagnostics disabled.",

@@ -60,7 +60,6 @@ public static class SkillBarLayoutDetector
         }
 
         var rightSpacing = utility1.Match.Bounds.X - heal.Match.Bounds.X;
-        var rightCenterSpacing = CenterX(utility1.Match.Bounds) - CenterX(heal.Match.Bounds);
         if (rightSpacing <= 0)
         {
             return Failed("The heal and first utility icon did not form a usable skill-bar row.", heal);
@@ -108,7 +107,6 @@ public static class SkillBarLayoutDetector
 
         slots[SkillBarComponentKind.WeaponSkill3] = weapon3;
         var weaponSpacing = weapon3.Match.Bounds.X - weapon2.Match.Bounds.X;
-        var weaponCenterSpacing = CenterX(weapon3.Match.Bounds) - CenterX(weapon2.Match.Bounds);
         if (weaponSpacing <= 0 ||
             !FindWeaponSlot(SkillBarComponentKind.WeaponSkill1, weapon2.Match.Bounds.X - weaponSpacing, required: false) ||
             !FindWeaponSlot(SkillBarComponentKind.WeaponSkill4, weapon2.Match.Bounds.X + weaponSpacing * 2, required: true) ||
@@ -117,12 +115,43 @@ public static class SkillBarLayoutDetector
             return Failed("Found weapon skills 2 and 3, but could not refine the full weapon group.", heal, rightSpacing);
         }
 
-        var buttonSize = Math.Max(1, (int)Math.Round((rightCenterSpacing + weaponCenterSpacing) / 2 * ButtonToSpacingRatio));
+        var rightGroup = new[]
+        {
+            (SkillBarComponentKind.HealSkill, 0),
+            (SkillBarComponentKind.UtilitySkill1, 1),
+            (SkillBarComponentKind.UtilitySkill2, 2),
+            (SkillBarComponentKind.UtilitySkill3, 3),
+            (SkillBarComponentKind.EliteSkill, 4),
+        };
+        var weaponGroup = new[]
+        {
+            // Skill 1 can carry an autocast overlay, so do not let it distort the grid fit.
+            (SkillBarComponentKind.WeaponSkill2, 1),
+            (SkillBarComponentKind.WeaponSkill3, 2),
+            (SkillBarComponentKind.WeaponSkill4, 3),
+            (SkillBarComponentKind.WeaponSkill5, 4),
+        };
+        var rightGeometry = FitGroupGeometry(slots, rightGroup);
+        var weaponGeometry = FitGroupGeometry(slots, weaponGroup);
+        var buttonSize = Math.Max(1, (int)Math.Round(
+            (rightGeometry.Spacing + weaponGeometry.Spacing) / 2 * ButtonToSpacingRatio));
         var rowCenter = Median(slots.Values.Select(match => CenterY(match.Match.Bounds)));
+        var centerXs = new Dictionary<SkillBarComponentKind, double>();
+        foreach (var (kind, index) in rightGroup)
+        {
+            centerXs[kind] = rightGeometry.FirstCenter + rightGeometry.Spacing * index;
+        }
+
+        foreach (var kind in Enum.GetValues<SkillBarComponentKind>().Where(IsWeaponSkill))
+        {
+            var index = (int)kind;
+            centerXs[kind] = weaponGeometry.FirstCenter + weaponGeometry.Spacing * index;
+        }
+
         var components = Enum.GetValues<SkillBarComponentKind>()
             .Select(kind => SkillBarComponent.FromPixelBounds(
                 kind,
-                ToButtonBounds(slots[kind].Match.Bounds, buttonSize, rowCenter),
+                ToButtonBounds(centerXs[kind], buttonSize, rowCenter),
                 frame.Width,
                 frame.Height,
                 slots[kind].Match.Score))
@@ -136,9 +165,9 @@ public static class SkillBarLayoutDetector
                 heal.Template.SkillId,
                 heal.Match.Score,
                 buttonSize,
-                ToButtonBounds(heal.Match.Bounds, buttonSize, rowCenter).X,
+                ToButtonBounds(centerXs[SkillBarComponentKind.HealSkill], buttonSize, rowCenter).X,
                 (int)Math.Round(rowCenter - buttonSize / 2.0),
-                (rightSpacing + weaponSpacing) / 2.0,
+                (rightGeometry.Spacing + weaponGeometry.Spacing) / 2.0,
                 confidence));
 
         bool FindRightSlot(SkillBarComponentKind kind, int offset)
@@ -233,10 +262,32 @@ public static class SkillBarLayoutDetector
 
     private static ScreenBounds FullFrame(CapturedFrame frame) => new(0, 0, frame.Width, frame.Height);
 
-    private static ScreenBounds ToButtonBounds(ScreenBounds templateBounds, int size, double rowCenter)
+    private static GroupGeometry FitGroupGeometry(
+        IReadOnlyDictionary<SkillBarComponentKind, TemplateMatch> slots,
+        IReadOnlyList<(SkillBarComponentKind Kind, int Index)> group)
+    {
+        var centers = group
+            .Select(entry => (entry.Index, Center: CenterX(slots[entry.Kind].Match.Bounds)))
+            .OrderBy(entry => entry.Index)
+            .ToList();
+        var spacing = Median(centers.SelectMany((left, leftIndex) => centers
+            .Skip(leftIndex + 1)
+            .Select(right => (right.Center - left.Center) / (right.Index - left.Index))));
+        var firstCenter = centers.Average(entry => entry.Center - entry.Index * spacing);
+        return new GroupGeometry(firstCenter, spacing);
+    }
+
+    private static bool IsWeaponSkill(SkillBarComponentKind kind) => kind is
+        SkillBarComponentKind.WeaponSkill1 or
+        SkillBarComponentKind.WeaponSkill2 or
+        SkillBarComponentKind.WeaponSkill3 or
+        SkillBarComponentKind.WeaponSkill4 or
+        SkillBarComponentKind.WeaponSkill5;
+
+    private static ScreenBounds ToButtonBounds(double centerX, int size, double rowCenter)
     {
         return new ScreenBounds(
-            (int)Math.Round(CenterX(templateBounds) - size / 2.0),
+            (int)Math.Round(centerX - size / 2.0),
             (int)Math.Round(rowCenter - size / 2.0),
             size,
             size);
@@ -270,4 +321,6 @@ public static class SkillBarLayoutDetector
     }
 
     private sealed record TemplateMatch(SkillBarIconTemplate Template, IconTemplateMatch Match);
+
+    private sealed record GroupGeometry(double FirstCenter, double Spacing);
 }

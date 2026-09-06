@@ -18,6 +18,22 @@ public sealed record CollectorSettings(
     public NormalizedCrop? SkillBarCrop => Regions
         .FirstOrDefault(region => region.Id == CalibratedRegion.SkillBarId)
         ?.Crop;
+
+    public CollectorSettings WithCalibration(
+        NormalizedCrop combatLogCrop,
+        NormalizedCrop skillBarCrop,
+        SkillBarLayout skillBarLayout) => this with
+    {
+        Regions =
+        [
+            .. Regions.Where(region =>
+                region.Id != CalibratedRegion.CombatLogId &&
+                region.Id != CalibratedRegion.SkillBarId),
+            new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", combatLogCrop),
+            new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", skillBarCrop),
+        ],
+        SkillBarLayout = skillBarLayout,
+    };
 }
 
 public sealed class CollectorSettingsStore

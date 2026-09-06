@@ -10,7 +10,7 @@ namespace Theorymancer.GuildWars2.Desktop.Calibration;
 public partial class CalibrationDialog : Window
 {
     private readonly SelectedGameWindow _gameWindow;
-    private readonly IReadOnlyList<CalibratedRegion> _otherRegions;
+    private readonly CollectorSettings _settings;
     private readonly ReferenceIcons _referenceIcons;
     private readonly BuildSkillCandidates _buildCandidates;
     private NormalizedCrop? _combatLogCrop;
@@ -25,11 +25,9 @@ public partial class CalibrationDialog : Window
         BuildSkillCandidates buildCandidates)
     {
         _gameWindow = gameWindow;
+        _settings = settings;
         _referenceIcons = referenceIcons;
         _buildCandidates = buildCandidates;
-        _otherRegions = settings.Regions
-            .Where(region => region.Id != CalibratedRegion.CombatLogId && region.Id != CalibratedRegion.SkillBarId)
-            .ToList();
         _combatLogCrop = settings.CombatLogCrop;
         _skillBarCrop = settings.SkillBarCrop;
         _skillBarLayout = settings.SkillBarLayout;
@@ -39,13 +37,10 @@ public partial class CalibrationDialog : Window
         UpdateControls();
     }
 
-    public CollectorSettings Settings => new(
-        [
-            .. _otherRegions,
-            new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop!),
-            new CalibratedRegion(CalibratedRegion.SkillBarId, "Skill bar", _skillBarCrop!),
-        ],
-        _skillBarLayout);
+    public CollectorSettings Settings => _settings.WithCalibration(
+        _combatLogCrop!,
+        _skillBarCrop!,
+        _skillBarLayout!);
 
     private void CalibrateCombatLog_Click(object sender, RoutedEventArgs e)
     {
@@ -149,7 +144,11 @@ public partial class CalibrationDialog : Window
 
     private IReadOnlyList<CalibratedRegion> BuildContextRegions(NormalizedCrop? skillBarCrop = null)
     {
-        var regions = _otherRegions.ToList();
+        var regions = _settings.Regions
+            .Where(region =>
+                region.Id != CalibratedRegion.CombatLogId &&
+                region.Id != CalibratedRegion.SkillBarId)
+            .ToList();
         if (_combatLogCrop is not null)
         {
             regions.Add(new CalibratedRegion(CalibratedRegion.CombatLogId, "Combat log", _combatLogCrop));
